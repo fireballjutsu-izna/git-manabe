@@ -28,6 +28,20 @@ interface Placed {
 
 const px = (x: number): number => PAD_X + x * COL_W;
 
+/** 用意してあるレーン色の数。これを超えたら先頭から巡回する。 */
+const LANE_COLORS = 6;
+
+/**
+ * そのレーンの線の色。
+ *
+ * Git Graph や GitKraken と同じで、流れごとに色を変えて追えるようにする。
+ * ref の色（枝＝シアン、HEAD＝アンバー…）とは意味が別なので、
+ * これは**線と丸にだけ**使い、バッジには乗せない。
+ */
+function laneColor(lane: number): string {
+  return `var(--lane-${lane % LANE_COLORS})`;
+}
+
 /**
  * バッジのおおよその幅。
  * SVG の中で実測するのは高くつくので、文字数から見積もる。
@@ -93,8 +107,10 @@ export function CommitGraph({ state }: { state: RepoState }) {
   overhangRight = Math.max(0, overhangRight);
 
   const placed = new Map<string, Placed>();
+  const laneOf = new Map<string, number>();
   for (const n of layout.nodes) {
     placed.set(n.id, { id: n.id, cx: overhangLeft + px(n.x), cy: top + n.y * LANE_H });
+    laneOf.set(n.id, n.y);
   }
 
   const width = overhangLeft + PAD_X * 2 + (layout.cols - 1) * COL_W + overhangRight;
@@ -129,12 +145,15 @@ export function CommitGraph({ state }: { state: RepoState }) {
               const from = placed.get(e.from);
               const to = placed.get(e.to);
               if (!from || !to) return null;
+              // 線の色は「どのレーンへ向かうか」で決める。
+              // そうすると、枝分かれした線が最後まで同じ色で追える。
+              const lane = laneOf.get(e.to) ?? 0;
               return (
                 <motion.path
                   key={`${e.from}->${e.to}`}
                   d={edgePath(from, to)}
                   fill="none"
-                  stroke="var(--commit-dim)"
+                  stroke={laneColor(lane)}
                   strokeWidth={2}
                   strokeLinecap="round"
                   strokeOpacity={reachable.has(e.to) ? 1 : 0.34}
@@ -173,7 +192,8 @@ export function CommitGraph({ state }: { state: RepoState }) {
                   transition={spring}
                   r={NODE_R}
                   fill="var(--bg-elev)"
-                  stroke={isHead ? 'var(--head)' : 'var(--commit)'}
+                  // HEAD だけは「いまいる場所」という意味の色を優先する
+                  stroke={isHead ? 'var(--head)' : laneColor(n.y)}
                   strokeWidth={isHead ? 3 : 2}
                   // 破線にして、色が見分けにくくても迷子だと分かるようにする
                   strokeDasharray={isOrphan ? '4 3' : undefined}
@@ -185,7 +205,7 @@ export function CommitGraph({ state }: { state: RepoState }) {
                     transition={spring}
                     r={NODE_R - 5}
                     fill="none"
-                    stroke={isHead ? 'var(--head)' : 'var(--commit)'}
+                    stroke={isHead ? 'var(--head)' : laneColor(n.y)}
                     strokeWidth={1.5}
                   />
                 )}
@@ -241,6 +261,7 @@ export function CommitGraph({ state }: { state: RepoState }) {
       <Legend
         hasMerge={Object.values(state.commits).some((c) => c.parents.length > 1)}
         orphaned={orphaned}
+        lanes={layout.lanes}
       />
     </div>
   );
@@ -251,7 +272,15 @@ export function CommitGraph({ state }: { state: RepoState }) {
  * 色だけで意味を伝えると、色が見分けにくい人に何も伝わらない。
  * 形と言葉でも同じことを言っておく。
  */
-function Legend({ hasMerge, orphaned }: { hasMerge: boolean; orphaned: number }) {
+function Legend({
+  hasMerge,
+  orphaned,
+  lanes,
+}: {
+  hasMerge: boolean;
+  orphaned: number;
+  lanes: number;
+}) {
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line px-3 py-2 text-[11px] text-muted">
       <li>
@@ -263,6 +292,7 @@ function Legend({ hasMerge, orphaned }: { hasMerge: boolean; orphaned: number })
       <li>
         <span className="text-detached">▨</span> detached HEAD（枝の外）
       </li>
+      {lanes > 1 && <li>線の色 ＝ 流れの区別</li>}
       {hasMerge && <li>◎ マージコミット（親が 2 つ）</li>}
       {orphaned > 0 && (
         <li>
