@@ -107,9 +107,17 @@ export default function HomePage() {
               コミットせずに作業を脇へどける。唯一、グラフが変わらないコマンド
             </span>
           </li>
+          <li className="flex gap-3">
+            <code className="mt-0.5 shrink-0 rounded border border-line bg-inset px-1.5 font-mono text-xs text-muted">
+              git reflog
+            </code>
+            <span className="text-sm">
+              HEAD が通ってきた道の記録。reset --hard でやらかしても、ここから戻れる
+            </span>
+          </li>
         </ul>
         <p className="mt-5 text-sm text-muted">
-          cherry-pick も使えます。reflog・リモート・コンフリクト解決は、これから追加していきます。
+          cherry-pick も使えます。リモートとコンフリクト解決は、これから追加していきます。
         </p>
       </section>
     </div>

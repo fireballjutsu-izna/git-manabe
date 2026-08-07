@@ -91,6 +91,10 @@ export function resolveCommit(state: RepoState, spec: string): string | null | '
  * ~ も ^ も第一親をたどる（マージコミットの ^2 のような指定までは踏み込まない）。
  */
 export function resolveRevision(state: RepoState, spec: string): string | null | 'ambiguous' {
+  // HEAD@{2} … reflog の 2 つ前。reset をやらかしたあとの戻り道になる
+  const atReflog = spec.match(/^HEAD@\{(\d+)\}$/);
+  if (atReflog) return reflogPosition(state, Number(atReflog[1]));
+
   const suffix = spec.match(/^(.*?)((?:[~^]\d*)+)$/);
   if (suffix) {
     const start = resolveRevision(state, suffix[1] || 'HEAD');
@@ -104,6 +108,21 @@ export function resolveRevision(state: RepoState, spec: string): string | null |
   const tag = state.tags.find((t) => t.name === spec);
   if (tag) return tag.target;
   return resolveCommit(state, spec);
+}
+
+/**
+ * `HEAD@{n}` が指すコミット。
+ *
+ * n = 0 はいまいる場所、n = 1 は「その 1 つ前に HEAD がいた場所」。
+ * 親をさかのぼる ~ とは別物で、こちらは**時間**をさかのぼる。
+ * だから rebase や reset で history から外れたコミットにも届く。
+ */
+function reflogPosition(state: RepoState, n: number): string | null {
+  const newestFirst = [...state.reflog].reverse();
+  if (newestFirst.length === 0) return null;
+  if (n === 0) return newestFirst[0].to;
+  const entry = newestFirst[n - 1];
+  return entry ? entry.from : null;
 }
 
 /** `~2^` のような連なりが、合計で何代さかのぼるかを数える。 */

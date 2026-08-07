@@ -266,6 +266,37 @@ async function main(): Promise<void> {
     );
     check('stash パネルが消える', await countEventually(page, '[data-pane="stash"]', 0), 0);
 
+    // ---- reflog からの復元 ----
+    // わざと reset --hard で切り離してから、拾い直せることを見る
+    const tipBeforeLoss = await page
+      .locator('[data-ref="ref:feature"]')
+      .getAttribute('data-ref-target');
+    const commitsBeforeLoss = await page.locator('[data-commit]').count();
+
+    await type(page, 'git reset --hard HEAD~1');
+    check(
+      '切り離してもコミットは消えない',
+      await page.locator('[data-commit]').count(),
+      commitsBeforeLoss,
+    );
+    check(
+      '辿れないコミットとして数えられる',
+      await page.getByText('どの枝からも辿れないコミット', { exact: false }).count(),
+      1,
+    );
+
+    await type(page, `git switch -c 救出 ${tipBeforeLoss}`);
+    check(
+      '救出という枝が生える',
+      await countEventually(page, '[data-ref="ref:救出"]', 1),
+      1,
+    );
+    check(
+      '拾った先は、失くしたコミットそのもの',
+      await page.locator('[data-ref="ref:救出"]').getAttribute('data-ref-target'),
+      tipBeforeLoss,
+    );
+
     check('コンソールにエラーが出ていない', consoleErrors, []);
 
     // アニメーションを減らす設定でも、中身は同じように出ること

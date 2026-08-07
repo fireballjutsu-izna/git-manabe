@@ -8,6 +8,7 @@ import {
   recordReflog,
   requireRepo,
   resolveCommit,
+  resolveRevision,
   setBranch,
   setHead,
 } from '../state';
@@ -47,7 +48,9 @@ function move(state: RepoState, command: ParsedCommand, as: 'checkout' | 'switch
     );
   }
 
-  if (creating) return createAndMove(state, target, as);
+  // 2 つめの位置引数は「どこに生やすか」。
+  // 省略すると HEAD。reflog で見つけた id をここに書くのが、失くしたコミットの拾い方。
+  if (creating) return createAndMove(state, target, command.positional[1], as);
 
   const branch = findBranch(state, target);
   if (branch) return moveToBranch(state, target, branch.target);
@@ -81,7 +84,12 @@ function move(state: RepoState, command: ParsedCommand, as: 'checkout' | 'switch
   return moveToCommit(state, resolved);
 }
 
-function createAndMove(state: RepoState, name: string, as: 'checkout' | 'switch'): CommandResult {
+function createAndMove(
+  state: RepoState,
+  name: string,
+  startPoint: string | undefined,
+  as: 'checkout' | 'switch',
+): CommandResult {
   if (findBranch(state, name)) {
     return fail(
       state,
@@ -89,7 +97,25 @@ function createAndMove(state: RepoState, name: string, as: 'checkout' | 'switch'
       `移るだけなら git ${as === 'checkout' ? 'checkout' : 'switch'} ${name} です。`,
     );
   }
-  const target = headCommitId(state);
+
+  let target: string | null;
+  if (startPoint === undefined) {
+    target = headCommitId(state);
+  } else {
+    const resolved = resolveRevision(state, startPoint);
+    if (resolved === 'ambiguous') {
+      return fail(
+        state,
+        `${startPoint} で始まるコミットが複数あります。`,
+        'もう少し長く書いてください。',
+      );
+    }
+    if (!resolved) {
+      return fail(state, `${startPoint} という枝もコミットもありません。`);
+    }
+    target = resolved;
+  }
+
   if (!target) {
     return fail(
       state,
@@ -105,7 +131,12 @@ function createAndMove(state: RepoState, name: string, as: 'checkout' | 'switch'
 
   return ok(
     next,
-    [`${name} を ${target} に作り、そこへ移りました。`],
+    [
+      `${name} を ${target} に作り、そこへ移りました。`,
+      ...(startPoint !== undefined
+        ? ['どの枝からも辿れなくなっていたコミットも、こうして名前を付ければ拾い直せます。']
+        : []),
+    ],
     ['repo', 'head'],
   );
 }

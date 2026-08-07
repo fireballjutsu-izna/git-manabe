@@ -1,7 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { currentBranchName, headCommitId, isAncestor } from '@/lib/git-engine';
+import {
+  currentBranchName,
+  headCommitId,
+  isAncestor,
+  reachableCommits,
+} from '@/lib/git-engine';
 import { useRepoStore } from '@/store/repo';
 
 /**
@@ -108,6 +113,22 @@ export function CommandButtons() {
       }
       if (state.stash.length > 0) {
         suggestions.push({ label: 'git stash pop', line: 'git stash pop', hint: '戻す' });
+      }
+
+      if (state.reflog.length > 0) {
+        suggestions.push({ label: 'git reflog', line: 'git reflog', hint: 'HEAD が通った道' });
+      }
+
+      // どこからも辿れなくなったコミットがあるなら、拾い方をそのまま出す。
+      // 「戻せる」と書くより、押せるボタンがあるほうが早い。
+      const reachable = reachableCommits(state);
+      const lostId = Object.keys(state.commits).find((id) => !reachable.has(id));
+      if (lostId) {
+        suggestions.push({
+          label: `git switch -c 救出 ${lostId}`,
+          line: `git switch -c 救出 ${lostId}`,
+          hint: '辿れないコミットを拾う',
+        });
       }
 
       if (state.head.type === 'detached' && state.branches.length > 0) {
