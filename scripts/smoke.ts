@@ -159,6 +159,62 @@ async function main(): Promise<void> {
       'HEAD → feature',
     );
 
+    // ---- merge ----
+    // main に戻り、両側を伸ばして分岐させてから取り込む
+    await type(page, 'git switch main');
+    await type(page, 'git commit -m 幹の上');
+    check('分岐してコミットが 3 つ', await countEventually(page, '[data-commit]', 3), 3);
+
+    await type(page, 'git merge feature');
+    check('マージでコミットが 4 つになる', await countEventually(page, '[data-commit]', 4), 4);
+    check(
+      'マージコミットの凡例が出る',
+      await page.getByText('マージコミット（親が 2 つ）').count(),
+      1,
+    );
+
+    // main と feature が同じコミットを指していないこと（3-way なので main だけ進む）
+    const mainAfterMerge = await page.locator('[data-ref="ref:main"]').getAttribute('data-ref-target');
+    const featureAfterMerge = await page
+      .locator('[data-ref="ref:feature"]')
+      .getAttribute('data-ref-target');
+    check('3-way では main だけが進む', mainAfterMerge !== featureAfterMerge, true);
+
+    // ---- reset の 3 モード ----
+    // --soft: ステージだけに残る
+    await type(page, 'git reset --soft HEAD~1');
+    check(
+      '--soft で中身がステージに残る',
+      await page.locator('[data-pane="index"] code').count(),
+      1,
+    );
+    check(
+      '--soft では作業ディレクトリに落ちない',
+      await page.locator('[data-pane="workingDir"]').getByText('変更はありません').count(),
+      1,
+    );
+
+    // --mixed: ステージが空になり、作業ディレクトリへ落ちる
+    await type(page, 'git reset --mixed HEAD');
+    check(
+      '--mixed でステージが空になる',
+      await page.locator('[data-pane="index"]').getByText('空です').count(),
+      1,
+    );
+    check(
+      '--mixed で作業ディレクトリに落ちる',
+      await page.locator('[data-pane="workingDir"] code').count(),
+      1,
+    );
+
+    // --hard: どちらも空になる
+    await type(page, 'git reset --hard HEAD');
+    check(
+      '--hard で作業ディレクトリも空になる',
+      await page.locator('[data-pane="workingDir"]').getByText('変更はありません').count(),
+      1,
+    );
+
     check('コンソールにエラーが出ていない', consoleErrors, []);
 
     // アニメーションを減らす設定でも、中身は同じように出ること

@@ -82,14 +82,107 @@ export function resolveCommit(state: RepoState, spec: string): string | null | '
   return null;
 }
 
-/** 名前が枝でもタグでもコミットでもあり得る指定を、コミット id に解決する。 */
+/**
+ * 名前が枝でもタグでもコミットでもあり得る指定を、コミット id に解決する。
+ *
+ * `HEAD~2` や `main^` のような「そこから何代さかのぼるか」の書き方も受ける。
+ * reset を教えるときにいちばん打つのが `git reset HEAD~1` なので、ここは要る。
+ * ~ も ^ も第一親をたどる（マージコミットの ^2 のような指定までは踏み込まない）。
+ */
 export function resolveRevision(state: RepoState, spec: string): string | null | 'ambiguous' {
+  const suffix = spec.match(/^(.*?)((?:[~^]\d*)+)$/);
+  if (suffix) {
+    const start = resolveRevision(state, suffix[1] || 'HEAD');
+    if (start === null || start === 'ambiguous') return start;
+    return walkBack(state, start, countSteps(suffix[2]));
+  }
+
   if (spec === 'HEAD') return headCommitId(state);
   const branch = findBranch(state, spec);
   if (branch) return branch.target;
   const tag = state.tags.find((t) => t.name === spec);
   if (tag) return tag.target;
   return resolveCommit(state, spec);
+}
+
+/** `~2^` のような連なりが、合計で何代さかのぼるかを数える。 */
+function countSteps(suffix: string): number {
+  let steps = 0;
+  for (const part of suffix.matchAll(/([~^])(\d*)/g)) {
+    steps += part[2] === '' ? 1 : Number(part[2]);
+  }
+  return steps;
+}
+
+/** 第一親を n 代さかのぼる。根を越えたら null。 */
+function walkBack(state: RepoState, from: string, steps: number): string | null {
+  let cursor: string | undefined = from;
+  for (let i = 0; i < steps; i += 1) {
+    const commit: Commit | undefined = cursor ? state.commits[cursor] : undefined;
+    cursor = commit?.parents[0];
+    if (!cursor) return null;
+  }
+  return cursor ?? null;
+}
+
+/** そのコミットから第一親に限らず辿れる、すべての祖先（自分自身を含む）。 */
+export function ancestorsOf(state: RepoState, id: string): Set<string> {
+  const seen = new Set<string>();
+  const queue = [id];
+  while (queue.length > 0) {
+    const current = queue.shift() as string;
+    if (seen.has(current)) continue;
+    const commit = state.commits[current];
+    if (!commit) continue;
+    seen.add(current);
+    queue.push(...commit.parents);
+  }
+  return seen;
+}
+
+/** a は b の祖先か（同じコミットなら true）。 */
+export function isAncestor(state: RepoState, a: string, b: string): boolean {
+  return ancestorsOf(state, b).has(a);
+}
+
+/**
+ * 2 つのコミットの共通の祖先のうち、いちばん新しいもの。
+ * 3-way マージが「どこから分かれたか」を知るために使う。
+ */
+export function mergeBase(state: RepoState, a: string, b: string): string | null {
+  const fromA = ancestorsOf(state, a);
+  const shared = [...ancestorsOf(state, b)].filter((id) => fromA.has(id));
+  if (shared.length === 0) return null;
+  return shared.reduce((best, id) =>
+    (state.commits[id]?.createdAt ?? 0) > (state.commits[best]?.createdAt ?? 0) ? id : best,
+  );
+}
+
+/** from から辿れて to からは辿れないコミット（「この範囲だけに入っている変更」）。 */
+export function commitsBetween(state: RepoState, to: string | null, from: string): string[] {
+  const keep = to ? ancestorsOf(state, to) : new Set<string>();
+  return [...ancestorsOf(state, from)].filter((id) => !keep.has(id));
+}
+
+/** そのコミット群が記録したパスを、重複なく集める。 */
+export function pathsIn(state: RepoState, ids: string[]): string[] {
+  const paths = new Set<string>();
+  for (const id of ids) {
+    for (const p of state.commits[id]?.paths ?? []) paths.add(p);
+  }
+  return [...paths];
+}
+
+/**
+ * tracked を HEAD から数え直す。
+ *
+ * Git が「知っている」ファイルは、いまの HEAD から辿れる履歴に入っているものだけ。
+ * reset で履歴を巻き戻したら、この集合も一緒に縮まないと、
+ * 消えたはずのファイルが modified 扱いのまま残ってしまう。
+ */
+export function recomputeTracked(state: RepoState, head: string | null): string[] {
+  if (!head) return [];
+  return pathsIn(state, [...ancestorsOf(state, head)]).sort();
 }
 
 /** 新しいコミットを 1 つ足した状態を返す。HEAD は動かさない（呼び出し側の責任）。 */

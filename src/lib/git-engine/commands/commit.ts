@@ -64,6 +64,7 @@ export function commit(state: RepoState, command: ParsedCommand): CommandResult 
     parents: parent ? [parent] : [],
     message: message.trim(),
     author: 'あなた',
+    paths: committedPaths,
   });
 
   // ステージの中身が、これでリポジトリ側のものになる

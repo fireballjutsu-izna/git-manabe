@@ -35,10 +35,25 @@ Learn Git Branching と Explain Git with D3 が疑似 Git を選んでいるの�
 | `git commit -m <msg>` | ステージの中身を 1 つのコミットにして、木を伸ばす |
 | `git branch [name]` / `-d` | 枝の一覧・作成・削除。HEAD は動かない |
 | `git checkout` / `git switch` | HEAD を別の枝へ移す。コミットを直接指すと detached HEAD になる |
+| `git merge <branch>` | 分かれた枝を 1 つに戻す。fast-forward と 3-way（親が 2 つのマージコミット） |
+| `git reset [--soft\|--mixed\|--hard] [<commit>]` | 枝を巻き戻す。`HEAD~1` のような指定も使える |
 | `git status` / `git log` | いまの 3 領域と、コミットの履歴を見る |
 | `touch <path>` / `edit <path>` | **Git のコマンドではありません。**作業ディレクトリに変更を作るための、このサイト独自のコマンドです |
 
-merge・reset の 3 モード・rebase・cherry-pick・revert・stash・reflog・リモート・コンフリクト解決は、これから追加していきます。
+rebase・cherry-pick・revert・stash・reflog・リモート・コンフリクト解決は、これから追加していきます。
+
+### reset の 3 つのモード
+
+同じ名前を共有している 3 つの別コマンドだと思うのが早いです。**どのモードでも枝は同じだけ動きます。**
+違うのは、取り消したコミットに入っていた変更をどこまで戻すか（＝どの領域を巻き添えにするか）だけです。
+
+| | 枝(HEAD) | ステージ | 作業ディレクトリ | 取り消した変更は |
+| --- | --- | --- | --- | --- |
+| `--soft` | 動く | 残す | 残す | ステージに積まれたまま |
+| `--mixed`（既定） | 動く | 消す | 残す | 未ステージの変更に落ちる |
+| `--hard` | 動く | 消す | 消す | 消える |
+
+サンドボックスでは、この違いが**3 領域パネルのどこが光るか**として出ます。
 
 ## 開発
 

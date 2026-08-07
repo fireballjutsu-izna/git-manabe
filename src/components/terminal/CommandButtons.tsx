@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { currentBranchName, headCommitId } from '@/lib/git-engine';
+import { currentBranchName, headCommitId, isAncestor } from '@/lib/git-engine';
 import { useRepoStore } from '@/store/repo';
 
 /**
@@ -50,6 +50,38 @@ export function CommandButtons() {
       for (const b of state.branches) {
         if (b.name === branch) continue;
         suggestions.push({ label: `git switch ${b.name}`, line: `git switch ${b.name}` });
+      }
+
+      // 取り込むものが残っている枝だけをマージ候補に出す。
+      // すでに祖先になっている枝を出すと「押しても何も起きない」ボタンになる。
+      if (branch) {
+        for (const b of state.branches) {
+          if (b.name === branch) continue;
+          if (isAncestor(state, b.target, head)) continue;
+          suggestions.push({
+            label: `git merge ${b.name}`,
+            line: `git merge ${b.name}`,
+            hint: isAncestor(state, head, b.target) ? 'fast-forward' : '2 親のコミットができる',
+          });
+        }
+      }
+
+      if (state.commits[head].parents.length > 0) {
+        suggestions.push({
+          label: 'git reset --soft HEAD~1',
+          line: 'git reset --soft HEAD~1',
+          hint: '中身はステージに残る',
+        });
+        suggestions.push({
+          label: 'git reset --mixed HEAD~1',
+          line: 'git reset --mixed HEAD~1',
+          hint: '中身は未ステージに落ちる',
+        });
+        suggestions.push({
+          label: 'git reset --hard HEAD~1',
+          line: 'git reset --hard HEAD~1',
+          hint: '中身は消える',
+        });
       }
 
       if (state.head.type === 'detached' && state.branches.length > 0) {
