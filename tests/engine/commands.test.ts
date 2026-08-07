@@ -289,7 +289,8 @@ describe('git status / log', () => {
 
 describe('入力の間違いへの応答', () => {
   it('未実装のコマンドは「知らない」ではなく「まだ」と言う', () => {
-    const result = last(['git init', 'git commit -m one', 'git rebase main']);
+    // 実装したら、ここは残っている未実装コマンドに差し替える
+    const result = last(['git init', 'git commit -m one', 'git reflog']);
     expect(result.error).toContain('まだこのサイトに入っていません');
   });
 

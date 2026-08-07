@@ -14,7 +14,10 @@ import { edit, touch } from './commands/files';
 import { init } from './commands/init';
 import { log } from './commands/log';
 import { merge } from './commands/merge';
+import { cherryPick, revert } from './commands/pick';
+import { rebase } from './commands/rebase';
 import { reset } from './commands/reset';
+import { stash } from './commands/stash';
 import { status } from './commands/status';
 import type { CommandResult, RepoState } from './types';
 
@@ -29,6 +32,10 @@ const GIT_HANDLERS: Record<string, Handler> = {
   switch: switchCommand,
   merge,
   reset,
+  rebase,
+  'cherry-pick': cherryPick,
+  revert,
+  stash,
   status,
   log,
 };

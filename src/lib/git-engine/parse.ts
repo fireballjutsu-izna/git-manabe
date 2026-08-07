@@ -34,6 +34,10 @@ export const GIT_COMMANDS = [
   'switch',
   'merge',
   'reset',
+  'rebase',
+  'cherry-pick',
+  'revert',
+  'stash',
   'status',
   'log',
 ] as const;
@@ -46,10 +50,6 @@ export const HELPER_COMMANDS = ['touch', 'edit'] as const;
  * 打たれたときに「知らない」ではなく「まだ」と返すために持っておく。
  */
 export const PLANNED_COMMANDS = [
-  'rebase',
-  'cherry-pick',
-  'revert',
-  'stash',
   'reflog',
   'tag',
   'remote',

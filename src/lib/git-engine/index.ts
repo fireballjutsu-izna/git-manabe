@@ -15,6 +15,7 @@ export type {
   Ref,
   ReflogEntry,
   RepoState,
+  StashEntry,
 } from './types';
 
 export {
@@ -28,6 +29,7 @@ export {
   mergeBase,
   commitsBetween,
   pathsIn,
+  reachableCommits,
 } from './state';
 export { run } from './run';
 export { parseLine, GIT_COMMANDS, HELPER_COMMANDS, PLANNED_COMMANDS } from './parse';

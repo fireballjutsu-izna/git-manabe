@@ -114,6 +114,37 @@ export function AreaPanes({
           </p>
         )}
       </div>
+
+      {/*
+        stash はグラフにも 3 領域にも現れない ― コミットを作らず、脇へどけるだけ。
+        置き場所がないと「消えた」と誤解されるので、退避中だけここに出す。
+      */}
+      {state.stash.length > 0 && (
+        <div
+          data-pane="stash"
+          className="rounded-card border border-tag bg-tint-violet px-3 py-2 text-xs"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-bold text-tag">退避中（stash）</span>
+            <span className="font-mono text-[11px] text-muted">{state.stash.length} 件</span>
+          </div>
+          <ul className="mt-1 space-y-0.5">
+            {[...state.stash].reverse().map((entry, i) => (
+              <li key={entry.id} className="flex items-center justify-between gap-2">
+                <code className="truncate font-mono text-[11px] text-fg">
+                  stash&#123;{i}&#125; {entry.message}
+                </code>
+                <span className="shrink-0 text-[10px] text-muted">
+                  {entry.index.length + entry.workingDir.length} 件
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1 leading-relaxed text-muted">
+            コミットではないので、グラフには出ません。git stash pop で戻せます。
+          </p>
+        </div>
+      )}
     </div>
   );
 }
