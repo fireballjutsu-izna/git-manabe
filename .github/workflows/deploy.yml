@@ -34,7 +34,13 @@ jobs:
       - name: Build
         run: npm run build
 
+      # enablement: true を付けると、この action が Pages 自体を有効化する。
+      # 付けないと、設定画面で一度 Pages を有効にするまで
+      # 「Get Pages site failed ... Not Found」で毎回落ちる。
+      # 上の permissions で pages: write を渡しているので、ここから設定できる。
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
