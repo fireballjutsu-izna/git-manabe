@@ -13,6 +13,8 @@ import { commit } from './commands/commit';
 import { edit, touch } from './commands/files';
 import { init } from './commands/init';
 import { log } from './commands/log';
+import { merge } from './commands/merge';
+import { reset } from './commands/reset';
 import { status } from './commands/status';
 import type { CommandResult, RepoState } from './types';
 
@@ -25,6 +27,8 @@ const GIT_HANDLERS: Record<string, Handler> = {
   branch,
   checkout,
   switch: switchCommand,
+  merge,
+  reset,
   status,
   log,
 };

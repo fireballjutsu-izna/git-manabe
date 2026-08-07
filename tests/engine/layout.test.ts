@@ -153,6 +153,62 @@ describe('レーンの安定性', () => {
   });
 });
 
+describe('マージコミット', () => {
+  it('2 本の辺が 1 つのコミットに入ってくる', () => {
+    const state = play([
+      'git init',
+      'git commit -m 根',
+      'git checkout -b feature',
+      'git commit -m 枝の上',
+      'git switch main',
+      'git commit -m 幹の上',
+      'git merge feature',
+    ]);
+
+    const layout = layoutGraph(state);
+    const merge = Object.values(state.commits).find((c) => c.parents.length === 2)!;
+
+    const incoming = layout.edges.filter((e) => e.to === merge.id);
+    expect(incoming).toHaveLength(2);
+    expect(incoming.map((e) => e.from).sort()).toEqual(
+      [idOf(state, '幹の上'), idOf(state, '枝の上')].sort(),
+    );
+  });
+
+  it('マージコミットは幹のレーンに乗り、枝は別のレーンに残る', () => {
+    const state = play([
+      'git init',
+      'git commit -m 根',
+      'git checkout -b feature',
+      'git commit -m 枝の上',
+      'git switch main',
+      'git commit -m 幹の上',
+      'git merge feature',
+    ]);
+    const at = coords(state);
+    const merge = Object.values(state.commits).find((c) => c.parents.length === 2)!;
+
+    expect(at[idOf(state, '根')]).toEqual({ x: 0, y: 0 });
+    expect(at[idOf(state, '幹の上')]).toEqual({ x: 1, y: 0 });
+    expect(at[merge.id]).toEqual({ x: 2, y: 0 });
+    expect(at[idOf(state, '枝の上')]).toEqual({ x: 1, y: 1 });
+  });
+
+  it('fast-forward ではコミットもレーンも増えない', () => {
+    const before = play([
+      'git init',
+      'git commit -m 根',
+      'git checkout -b feature',
+      'git commit -m 枝の上',
+      'git switch main',
+    ]);
+    const after = run(before, 'git merge feature').state;
+
+    expect(layoutGraph(after).nodes).toHaveLength(2);
+    expect(layoutGraph(after).lanes).toBe(1);
+  });
+});
+
 describe('どの枝からも指されていないコミット', () => {
   it('detached HEAD で作ったコミットも並べられる', () => {
     const base = play(['git init', 'git commit -m one', 'git commit -m two']);

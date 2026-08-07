@@ -17,7 +17,18 @@ export type {
   RepoState,
 } from './types';
 
-export { emptyState, headCommitId, currentBranchName, refsAt, resolveRevision } from './state';
+export {
+  emptyState,
+  headCommitId,
+  currentBranchName,
+  refsAt,
+  resolveRevision,
+  ancestorsOf,
+  isAncestor,
+  mergeBase,
+  commitsBetween,
+  pathsIn,
+} from './state';
 export { run } from './run';
 export { parseLine, GIT_COMMANDS, HELPER_COMMANDS, PLANNED_COMMANDS } from './parse';
 export {

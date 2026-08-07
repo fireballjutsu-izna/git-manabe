@@ -119,6 +119,8 @@ export function CommitGraph({ state }: { state: RepoState }) {
             const p = placed.get(n.id)!;
             const commit = state.commits[n.id];
             const isHead = headOid === n.id || (headBranch && branchTarget(state, headBranch) === n.id);
+            // 親が 2 つ ＝ マージコミット。二重丸にして、線が 2 本入る先を目立たせる
+            const isMerge = (commit?.parents.length ?? 0) > 1;
             return (
               <motion.g
                 key={n.id}
@@ -138,6 +140,17 @@ export function CommitGraph({ state }: { state: RepoState }) {
                   stroke={isHead ? 'var(--head)' : 'var(--commit)'}
                   strokeWidth={isHead ? 3 : 2}
                 />
+                {isMerge && (
+                  <motion.circle
+                    animate={{ cx: p.cx, cy: p.cy }}
+                    initial={{ cx: p.cx, cy: p.cy }}
+                    transition={spring}
+                    r={NODE_R - 5}
+                    fill="none"
+                    stroke={isHead ? 'var(--head)' : 'var(--commit)'}
+                    strokeWidth={1.5}
+                  />
+                )}
                 <text
                   x={p.cx}
                   y={p.cy + NODE_R + 16}
@@ -154,7 +167,9 @@ export function CommitGraph({ state }: { state: RepoState }) {
                 >
                   {short(commit?.message ?? '')}
                 </text>
-                <title>{`${n.id}  ${commit?.message ?? ''}`}</title>
+                <title>
+                  {`${n.id}  ${commit?.message ?? ''}${isMerge ? '（マージコミット・親が 2 つ）' : ''}`}
+                </title>
               </motion.g>
             );
           })}
@@ -182,7 +197,31 @@ export function CommitGraph({ state }: { state: RepoState }) {
           })}
         </AnimatePresence>
       </svg>
+
+      <Legend hasMerge={Object.values(state.commits).some((c) => c.parents.length > 1)} />
     </div>
+  );
+}
+
+/**
+ * 凡例。
+ * 色だけで意味を伝えると、色が見分けにくい人に何も伝わらない。
+ * 形と言葉でも同じことを言っておく。
+ */
+function Legend({ hasMerge }: { hasMerge: boolean }) {
+  return (
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line px-3 py-2 text-[11px] text-muted">
+      <li>
+        <span className="text-branch">■</span> 枝
+      </li>
+      <li>
+        <span className="text-head">■</span> HEAD（いまいる場所）
+      </li>
+      <li>
+        <span className="text-detached">▨</span> detached HEAD（枝の外）
+      </li>
+      {hasMerge && <li>◎ マージコミット（親が 2 つ）</li>}
+    </ul>
   );
 }
 

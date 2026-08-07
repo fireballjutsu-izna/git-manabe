@@ -64,9 +64,28 @@ export default function HomePage() {
               HEAD を別の枝へ移す。コミットを直接指すと detached HEAD になる
             </span>
           </li>
+          <li className="flex gap-3">
+            <code className="mt-0.5 shrink-0 rounded border border-line bg-inset px-1.5 font-mono text-xs text-muted">
+              git merge
+            </code>
+            <span className="text-sm">
+              分かれた枝を 1 つに戻す。分岐していなければ fast-forward
+              で、コミットは増えない
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <code className="mt-0.5 shrink-0 rounded border border-line bg-inset px-1.5 font-mono text-xs text-muted">
+              git reset
+            </code>
+            <span className="text-sm">
+              枝を巻き戻す。<code className="font-mono">--soft</code> /{' '}
+              <code className="font-mono">--mixed</code> /{' '}
+              <code className="font-mono">--hard</code> で、どの領域まで巻き添えにするかが変わる
+            </span>
+          </li>
         </ul>
         <p className="mt-5 text-sm text-muted">
-          merge・reset・rebase・reflog・リモートは、これから追加していきます。
+          rebase・cherry-pick・revert・stash・reflog・リモートは、これから追加していきます。
         </p>
       </section>
     </div>
