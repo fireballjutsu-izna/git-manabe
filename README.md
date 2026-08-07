@@ -54,6 +54,7 @@ npm run dev        # http://localhost:3000/git-manabe/
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
 | `npm test` | Vitest（シミュレータのコアを重点的に） |
+| `npm run smoke` | 書き出した `out/` を実際のブラウザで開いて通しで確認（要 `npm run build`） |
 
 ### 構成
 
