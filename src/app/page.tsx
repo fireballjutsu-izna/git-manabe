@@ -4,7 +4,7 @@ import { SITE } from '@/lib/site';
 export default function HomePage() {
   return (
     <div className="mx-auto max-w-3xl">
-      <h1 className="text-3xl font-bold tracking-wide text-fg">{SITE.name}</h1>
+      <h1 className="text-3xl font-bold tracking-wide text-accent">{SITE.name}</h1>
       <p className="mt-1 text-sm text-muted">{SITE.tagline}</p>
 
       <p className="mt-8 leading-loose">
@@ -30,7 +30,7 @@ export default function HomePage() {
       </div>
 
       <section className="mt-14">
-        <h2 className="border-b border-line pb-2 text-lg font-bold text-fg">いま触れるもの</h2>
+        <h2 className="border-b border-line pb-2 text-lg font-bold text-accent">いま触れるもの</h2>
         <ul className="mt-4 space-y-3">
           <li className="flex gap-3">
             <code className="mt-0.5 shrink-0 rounded border border-line bg-inset px-1.5 font-mono text-xs text-muted">

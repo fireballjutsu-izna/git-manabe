@@ -2,11 +2,14 @@
 
 /*
  * 設計方針（隣の webgl_manabe と揃える。崩さないこと）
- *   ネオンは「光る線」にだけ使い、「読む文字」には一切かけない。
+ *   ネオンは「光る線」と「見出し」にだけ使い、「読む文字」には一切かけない。
  *   - 本文にグロー・グラデーション・高彩度色を使わない
- *   - 本文 7:1 / 補助テキスト 4.5:1 以上のコントラスト比を保つ
- *   - ネオン色は面ではなく線・枠・アイコンに乗せる
+ *   - 本文 7:1 / 補助テキストと見出し 4.5:1 / 枠線などの非文字 3:1 以上を保つ
+ *   - ネオン色は本文の面ではなく、線・枠・アイコン・見出しに乗せる
  *   - 色を唯一の情報チャネルにしない（ラベル・線種・文言でも区別する）
+ *
+ * 比率は実測して決めている。数値を変えるときは測り直すこと
+ * （相対輝度 → (L1+0.05)/(L2+0.05)）。
  *
  * ウェブフォントは読み込まない。端末の日本語フォントに任せて、
  * ビルド時のネットワーク依存とリポジトリ内のバイナリをゼロに保つ。
@@ -22,8 +25,15 @@
   --bg-inset: #0d0d18;
   --text: #e8e8f2;
   --text-muted: #9a9ab0;
-  --border: #26263c;
-  --border-lit: #3a3a5c;
+  /*
+   * 枠線は「読む文字」ではないが、カードの境界という情報を担っているので
+   * 非文字コントラストの基準 3:1 を満たす明るさにする。
+   * 色相は残しつつ彩度は抑える。ここを鮮やかにすると、
+   * カードの枠が全部主張して画面が線だらけになる。
+   * 実測（vs --bg / --bg-elev）: --border 3.33 / 3.13、--border-lit 4.86
+   */
+  --border: #62627a;
+  --border-lit: #7c7c96;
 
   /* ネオン（線・発光専用） */
   --neon-cyan: #4fd6ff;
@@ -44,7 +54,8 @@
    *   タグ = バイオレット / detached = ローズ / リモート = ライム
    */
   --commit: #c9c9de;
-  --commit-dim: #5a5a78;
+  /* グラフの辺。細い線なので、点と同じくらい見えないと親子関係が読めない（実測 4.88） */
+  --commit-dim: #7a7a9e;
   --branch: var(--neon-cyan);
   --head: var(--neon-amber);
   --tag: var(--neon-violet);
@@ -55,6 +66,15 @@
   --area-working: var(--neon-rose);
   --area-index: var(--neon-amber);
   --area-repo: var(--neon-lime);
+
+  /*
+   * 見出しに乗せる色。
+   * 本文には使わない（読む文字は --text のまま）が、見出しと小見出しはここを使う。
+   * 全部を無彩色にすると、とくにライトテーマで画面が平らになり、
+   * どこが区切りなのかが読み取れなくなる。
+   * 明度はライト 5.27 / ダーク 11.64 で、どちらも 4.5:1 を超えている。
+   */
+  --accent: var(--neon-cyan);
 
   --font-sans:
     system-ui, -apple-system, 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sans-serif;
@@ -73,8 +93,9 @@
   --bg-inset: #f1f1f7;
   --text: #16161f;
   --text-muted: #4a4a60;
-  --border: #d5d5e2;
-  --border-lit: #b6b6cb;
+  /* 実測（vs --bg #f7f7fb）: --border 3.05 / --border-lit 4.49 */
+  --border: #8c8ca9;
+  --border-lit: #70708a;
 
   /* 同じ色相のまま暗く・低彩度にして、白背景でも読める明度に落とす */
   --neon-cyan: #0b6f96;
@@ -90,7 +111,7 @@
   --tint-rose: rgb(179 36 72 / 8%);
 
   --commit: #3a3a52;
-  --commit-dim: #9a9ab5;
+  --commit-dim: #6a6a86; /* 実測 4.52（vs --bg-sunken） */
 
   --shadow-card: 0 1px 2px rgb(20 20 40 / 6%), 0 8px 24px -20px rgb(20 20 40 / 40%);
 }
@@ -121,8 +142,12 @@
   --color-tint-amber: var(--tint-amber);
   --color-tint-rose: var(--tint-rose);
 
+  --color-accent: var(--accent);
   --color-commit: var(--commit);
   --color-branch: var(--branch);
+  --color-area-working: var(--area-working);
+  --color-area-index: var(--area-index);
+  --color-area-repo: var(--area-repo);
   --color-head: var(--head);
   --color-tag: var(--tag);
   --color-detached: var(--detached);

@@ -42,6 +42,7 @@ export function AreaPanes({
         title="作業ディレクトリ"
         note="編集しただけで、まだ Git に渡していない"
         accent="var(--area-working)"
+        tint="var(--tint-rose)"
         lit={lit.includes('workingDir')}
         empty="変更はありません"
         items={state.workingDir.map((f) => ({
@@ -58,6 +59,7 @@ export function AreaPanes({
         title="ステージ（index）"
         note="次のコミットに含めると決めた変更"
         accent="var(--area-index)"
+        tint="var(--tint-amber)"
         lit={lit.includes('index')}
         empty="空です"
         items={state.index.map((f) => ({ key: f.path, label: f.path, badge: 'staged' }))}
@@ -70,6 +72,7 @@ export function AreaPanes({
         title="リポジトリ"
         note="コミットとして確定した履歴"
         accent="var(--area-repo)"
+        tint="var(--tint-lime)"
         lit={lit.includes('repo')}
         empty={state.initialized ? 'まだコミットがありません' : 'まだリポジトリがありません'}
         items={
@@ -86,13 +89,15 @@ export function AreaPanes({
       />
 
       <div
+        data-pane="head"
+        data-lit={lit.includes('head') ? 'true' : undefined}
         className={[
           'rounded-card border px-3 py-2 text-xs transition-colors duration-300',
           lit.includes('head') ? 'border-head bg-tint-amber' : 'border-line bg-elev',
         ].join(' ')}
       >
         <div className="flex items-center justify-between gap-2">
-          <span className="font-bold text-fg">HEAD</span>
+          <span className="font-bold text-head">HEAD</span>
           <span className="font-mono text-[11px] text-muted">
             {!state.initialized
               ? '—'
@@ -119,11 +124,19 @@ interface Item {
   badge: string;
 }
 
+/**
+ * 領域 1 つ。
+ *
+ * 見出しの色は常にその領域のアクセントで、光っているかどうかでは変えない
+ * ― 3 つの領域を色で覚えてもらいたいのに、その色が出たり消えたりしては覚えられない。
+ * 「いま書き換わった」の合図は、枠線と下地の色でつける。
+ */
 function Pane({
   id,
   title,
   note,
   accent,
+  tint,
   lit,
   items,
   empty,
@@ -132,6 +145,7 @@ function Pane({
   title: string;
   note: string;
   accent: string;
+  tint: string;
   lit: boolean;
   items: Item[];
   empty: string;
@@ -139,12 +153,16 @@ function Pane({
   return (
     <section
       data-pane={id}
-      className="rounded-card border bg-elev px-3 py-2.5 transition-colors duration-300"
-      style={{ borderColor: lit ? accent : 'var(--border)' }}
+      data-lit={lit ? 'true' : undefined}
+      className="rounded-card border px-3 py-2.5 transition-colors duration-300"
+      style={{
+        borderColor: lit ? accent : 'var(--border)',
+        backgroundColor: lit ? tint : 'var(--bg-elev)',
+      }}
       aria-live="polite"
     >
       <header className="flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-bold" style={{ color: lit ? accent : 'var(--text)' }}>
+        <h3 className="text-sm font-bold" style={{ color: accent }}>
           {title}
         </h3>
         <span className="text-[11px] text-muted">{items.length > 0 ? items.length : ''}</span>

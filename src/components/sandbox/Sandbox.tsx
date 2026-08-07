@@ -21,7 +21,7 @@ export function Sandbox() {
     <div className="grid gap-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold text-fg">サンドボックス</h1>
+          <h1 className="text-xl font-bold text-accent">サンドボックス</h1>
           <p className="mt-1 text-sm text-muted">
             打ったコマンドがそのままグラフになります。何をしても壊れません。
           </p>
@@ -58,14 +58,14 @@ export function Sandbox() {
           <CommitGraph state={state} />
 
           <div>
-            <h2 className="mb-2 text-xs font-bold tracking-wide text-muted">
+            <h2 className="mb-2 text-xs font-bold tracking-wide text-accent">
               打てるコマンド（押すとそのまま実行されます）
             </h2>
             <CommandButtons />
           </div>
 
           <div>
-            <h2 className="mb-2 text-xs font-bold tracking-wide text-muted">
+            <h2 className="mb-2 text-xs font-bold tracking-wide text-accent">
               ターミナル（直接打つこともできます・↑↓ で履歴）
             </h2>
             <Terminal />
@@ -73,7 +73,7 @@ export function Sandbox() {
         </div>
 
         <aside className="min-w-0">
-          <h2 className="mb-2 text-xs font-bold tracking-wide text-muted">
+          <h2 className="mb-2 text-xs font-bold tracking-wide text-accent">
             3 つの領域（書き換わったところが光ります）
           </h2>
           <AreaPanes state={state} touched={lastResult?.touched ?? []} pulse={pulse} />

@@ -35,7 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <header className="sticky top-0 z-20 border-b border-line bg-bg/85 backdrop-blur">
           <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4">
             <Link href="/" className="flex items-baseline gap-2 no-underline">
-              <span className="text-lg font-bold tracking-wide text-fg">{SITE.name}</span>
+              <span className="text-lg font-bold tracking-wide text-accent">{SITE.name}</span>
               <span className="hidden text-xs text-muted sm:inline">{SITE.tagline}</span>
             </Link>
             <nav className="ml-auto flex items-center gap-1 text-sm">

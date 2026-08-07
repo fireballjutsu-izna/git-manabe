@@ -1,5 +1,6 @@
 import createMDX from '@next/mdx';
 import rehypePrettyCode from 'rehype-pretty-code';
+import remarkGfm from 'remark-gfm';
 
 /**
  * GitHub Pages では https://fireballjutsu-izna.github.io/git-manabe/ に配信されるため、
@@ -29,7 +30,9 @@ const prettyCodeOptions = {
 
 const withMDX = createMDX({
   options: {
-    remarkPlugins: [],
+    // 表・打ち消し線・自動リンクは GFM の拡張なので、素の MDX では解釈されない。
+    // これが無いと記事の表が「| 見出し | ... |」のまま本文に出る。
+    remarkPlugins: [remarkGfm],
     rehypePlugins: [[rehypePrettyCode, prettyCodeOptions]],
   },
 });
