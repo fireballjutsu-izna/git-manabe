@@ -62,6 +62,23 @@
   --detached: var(--neon-rose);
   --remote: var(--neon-lime);
 
+  /*
+   * グラフのレーン（線）の色。
+   *
+   * ref の色（上の --branch / --head / …）とは役割を分けている:
+   *   ref の色  … 「何であるか」（枝／HEAD／タグ／detached）を区別する
+   *   レーン色  … 「どの流れか」を区別する
+   * 混ぜるとどちらの意味も読めなくなるので、レーン色は**線と丸にだけ**使い、
+   * バッジには乗せない。Git Graph や GitKraken と同じ分け方。
+   * 実測（vs --bg-sunken）: いずれも 7.8 以上。
+   */
+  --lane-0: #8ea2c8;
+  --lane-1: #7fd4a8;
+  --lane-2: #c99ae0;
+  --lane-3: #e0b473;
+  --lane-4: #e08fa6;
+  --lane-5: #79c9cf;
+
   /* 3 領域。add / commit がどこを書き換えたかを、この色で光らせる */
   --area-working: var(--neon-rose);
   --area-index: var(--neon-amber);
@@ -113,6 +130,14 @@
   --commit: #3a3a52;
   --commit-dim: #6a6a86; /* 実測 4.52（vs --bg-sunken） */
 
+  /* 白い下地でも読める明度に落としたレーン色。実測（vs --bg-sunken）はいずれも 5.5 以上 */
+  --lane-0: #41557d;
+  --lane-1: #1d6b4a;
+  --lane-2: #6a3f8f;
+  --lane-3: #7a5410;
+  --lane-4: #9c2f4d;
+  --lane-5: #1c5f70;
+
   --shadow-card: 0 1px 2px rgb(20 20 40 / 6%), 0 8px 24px -20px rgb(20 20 40 / 40%);
 }
 
@@ -145,6 +170,12 @@
   --color-accent: var(--accent);
   --color-commit: var(--commit);
   --color-branch: var(--branch);
+  --color-lane-0: var(--lane-0);
+  --color-lane-1: var(--lane-1);
+  --color-lane-2: var(--lane-2);
+  --color-lane-3: var(--lane-3);
+  --color-lane-4: var(--lane-4);
+  --color-lane-5: var(--lane-5);
   --color-area-working: var(--area-working);
   --color-area-index: var(--area-index);
   --color-area-repo: var(--area-repo);

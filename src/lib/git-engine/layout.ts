@@ -101,15 +101,16 @@ export function layoutGraph(state: RepoState): GraphLayout {
   const gen = computeGenerations(state);
   const lane: Record<string, number> = {};
   const assigned = new Set<string>();
-  /** レーン番号 → そのレーンが埋まっている列。 */
-  const occupied = new Map<number, Set<number>>();
 
-  const freeLane = (columns: number[]): number => {
-    for (let candidate = 0; ; candidate += 1) {
-      const used = occupied.get(candidate);
-      if (!used || columns.every((c) => !used.has(c))) return candidate;
-    }
-  };
+  /*
+   * レーンは流れごとに 1 本ずつ与え、**詰めない**。
+   *
+   * 空いていれば同じレーンに載せる、という詰め方もできる（そのほうが縦に短い）。
+   * だがそれをやると、無関係な 2 つの区間が同じ行に並び、
+   * しかもレーンの色まで同じになるので、1 本の連続した流れに見えてしまう。
+   * 縦に伸びるほうが、嘘の連続に見えるよりずっとよい。
+   */
+  let nextLane = 0;
 
   for (const tip of orderedTips(state)) {
     // 先端から第一親をたどり、まだレーンが決まっていない範囲だけを取る。
@@ -121,17 +122,16 @@ export function layoutGraph(state: RepoState): GraphLayout {
       chain.push(cursor);
       cursor = state.commits[cursor].parents[0];
     }
+    // 何も残っていない先端はレーンを消費しない。
+    // fast-forward のあとのように、2 つの枝が同じコミットを指しているときがこれ。
     if (chain.length === 0) continue;
 
-    const columns = chain.map((id) => gen[id] ?? 0);
-    const y = freeLane(columns);
-    const used = occupied.get(y) ?? new Set<number>();
-    for (let i = 0; i < chain.length; i += 1) {
-      lane[chain[i]] = y;
-      assigned.add(chain[i]);
-      used.add(columns[i]);
+    const y = nextLane;
+    nextLane += 1;
+    for (const id of chain) {
+      lane[id] = y;
+      assigned.add(id);
     }
-    occupied.set(y, used);
   }
 
   const nodes: GraphNode[] = ids

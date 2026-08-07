@@ -89,16 +89,46 @@ describe('枝分かれ', () => {
     expect(at[idOf(state, '枝の上')].y).toBe(1);
   });
 
-  it('ぶつからないうちは、レーンを増やさず親と同じ列に乗る', () => {
-    // 分かれてはいるが main 側がまだ伸びていないので、見た目は 1 本の線でよい。
-    // ここでレーンを増やすと、コミットするたびにグラフが跳ねて追えなくなる。
+  it('枝を切って 1 回コミットしただけでも、行は分ける', () => {
+    // 詰めれば 1 行に収まるが、そうすると main の流れと feature の流れが
+    // 同じ行・同じ色になり、1 本の連続した流れに見えてしまう。
+    // 親子関係は辺が示すので、行を分けても嘘にはならない。
     const state = play([
       'git init',
       'git commit -m 根',
       'git checkout -b feature',
       'git commit -m 枝の上',
     ]);
-    expect(layoutGraph(state).lanes).toBe(1);
+    const at = coords(state);
+
+    expect(layoutGraph(state).lanes).toBe(2);
+    expect(at[idOf(state, '根')]).toEqual({ x: 0, y: 0 });
+    expect(at[idOf(state, '枝の上')]).toEqual({ x: 1, y: 1 });
+    // 親子であることは、辺で示され続ける
+    expect(layoutGraph(state).edges).toEqual([
+      { from: idOf(state, '根'), to: idOf(state, '枝の上') },
+    ]);
+  });
+
+  it('無関係な流れが、同じ行に載ることはない', () => {
+    // 枝を 3 本立ててから、いちばん古い枝を消す。
+    // 「空いた行を使い回す」実装だと、ここで無関係な区間が同じ行に並んでしまう。
+    const state = play([
+      'git init',
+      'git commit -m 根',
+      'git checkout -b a',
+      'git commit -m aの上',
+      'git switch main',
+      'git checkout -b b',
+      'git commit -m bの上',
+      'git switch main',
+      'git commit -m mainの上',
+    ]);
+    const at = coords(state);
+
+    // 3 つの流れが、それぞれ別の行にいる
+    const lanes = [at[idOf(state, 'mainの上')].y, at[idOf(state, 'aの上')].y, at[idOf(state, 'bの上')].y];
+    expect(new Set(lanes).size).toBe(3);
   });
 
   it('枝が 3 本なら 3 レーンに分かれ、どれも重ならない', () => {

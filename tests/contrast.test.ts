@@ -87,6 +87,13 @@ const RULES: { fg: string; bg: string; min: number; what: string }[] = [
   { fg: '--head', bg: '--bg-sunken', min: 3, what: 'HEAD のラベル' },
   { fg: '--tag', bg: '--bg-sunken', min: 3, what: 'タグのラベル' },
   { fg: '--detached', bg: '--bg-sunken', min: 3, what: 'detached HEAD のラベル' },
+  // レーンの線。細い線なので、下地から 3:1 は要る
+  { fg: '--lane-0', bg: '--bg-sunken', min: 3, what: 'レーン 0 の線' },
+  { fg: '--lane-1', bg: '--bg-sunken', min: 3, what: 'レーン 1 の線' },
+  { fg: '--lane-2', bg: '--bg-sunken', min: 3, what: 'レーン 2 の線' },
+  { fg: '--lane-3', bg: '--bg-sunken', min: 3, what: 'レーン 3 の線' },
+  { fg: '--lane-4', bg: '--bg-sunken', min: 3, what: 'レーン 4 の線' },
+  { fg: '--lane-5', bg: '--bg-sunken', min: 3, what: 'レーン 5 の線' },
 ];
 
 describe.each([
@@ -104,6 +111,25 @@ describe('テーマの取りこぼし', () => {
     for (const { fg, bg } of RULES) {
       expect(() => resolve(light, fg), fg).not.toThrow();
       expect(() => resolve(light, bg), bg).not.toThrow();
+    }
+  });
+
+  it('ライトはレーン 6 色をすべて上書きしている', () => {
+    // 1 色でも忘れると、白い下地にダーク用の明るい線が引かれて見えなくなる
+    for (let i = 0; i < 6; i += 1) {
+      expect(lightOverrides[`--lane-${i}`], `--lane-${i}`).toBeDefined();
+    }
+  });
+
+  it('レーン色に、同じ値が 2 つ入っていない', () => {
+    // 流れを区別するための色なので、重複すると 2 本の流れが同じ色になる。
+    // 色相の離れ具合まではここでは測れないので、少なくとも同値でないことを見る。
+    for (const tokens of [base, light]) {
+      for (let i = 0; i < 6; i += 1) {
+        const a = resolve(tokens, `--lane-${i}`);
+        const b = resolve(tokens, `--lane-${(i + 1) % 6}`);
+        expect(a, `--lane-${i}`).not.toBe(b);
+      }
     }
   });
 

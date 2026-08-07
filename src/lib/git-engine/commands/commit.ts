@@ -84,6 +84,27 @@ export function commit(state: RepoState, command: ParsedCommand): CommandResult 
     notes.push('detached HEAD なので、どの枝も動いていません。HEAD だけが進みました。');
   }
 
+  /*
+   * 枝を切った直後の 1 コミット目。
+   *
+   * グラフでは行を分けて描くので枝分かれに見えるが、履歴としてはまだ分かれていない
+   * ― 相手はこのコミットの祖先で、1 本の道の途中にいるだけ。
+   * 見た目と実態がずれる唯一の場面なので、ここだけは言葉で補う。
+   */
+  if (parent) {
+    const behind = next.branches
+      .filter((b) => b.name !== branch && b.target === parent)
+      .map((b) => b.name);
+    if (behind.length > 0) {
+      notes.push(
+        `${behind.join(' と ')} は、まだ分かれていません。このコミットの親を指しているだけです。`,
+      );
+      notes.push(
+        `${behind[0]} 側にもコミットすると、そこで初めて「どちらにも相手の持たないコミットがある」状態になります。`,
+      );
+    }
+  }
+
   next = recordReflog(next, 'commit', message.trim(), parent, id);
 
   return ok(
