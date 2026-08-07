@@ -39,12 +39,16 @@ export const GIT_COMMANDS = [
   'revert',
   'stash',
   'reflog',
+  'remote',
+  'push',
+  'fetch',
+  'pull',
   'status',
   'log',
 ] as const;
 
 /** Git のコマンドではないが、サンドボックスの中でだけ使える補助コマンド。 */
-export const HELPER_COMMANDS = ['touch', 'edit'] as const;
+export const HELPER_COMMANDS = ['touch', 'edit', 'teammate'] as const;
 
 /**
  * 実際の Git にはあるが、このサイトではまだ実装していないもの。
@@ -52,10 +56,6 @@ export const HELPER_COMMANDS = ['touch', 'edit'] as const;
  */
 export const PLANNED_COMMANDS = [
   'tag',
-  'remote',
-  'fetch',
-  'pull',
-  'push',
   'diff',
   'restore',
   'rm',

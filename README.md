@@ -42,10 +42,32 @@ Learn Git Branching と Explain Git with D3 が疑似 Git を選んでいるの�
 | `git revert <commit>` | 打ち消すコミットを**新しく積む**。履歴は消えない |
 | `git stash` / `pop` / `apply` / `list` / `drop` | コミットせずに作業を脇へどける。グラフは変わらない |
 | `git reflog` | HEAD が通ってきた道の記録。**失くしたコミットへの最後の道** |
+| `git remote add <name> <url>` / `-v` | もう 1 つのリポジトリに名前を付ける。まだ通信はしない |
+| `git push [remote] [branch]` | 手元のコミットを向こうへ送る。早送りにならないと**断られる** |
+| `git fetch [remote]` | 取ってくるだけ。**手元の枝は 1 つも動かない** |
+| `git pull [remote] [branch]` | fetch してから merge する |
 | `git status` / `git log` | いまの 3 領域と、コミットの履歴を見る |
 | `touch <path>` / `edit <path>` | **Git のコマンドではありません。**作業ディレクトリに変更を作るための、このサイト独自のコマンドです |
+| `teammate [n]` | **Git のコマンドではありません。**「誰かが向こうへ n 個コミットした」ことにします |
 
-リモートとコンフリクト解決は、これから追加していきます。
+コンフリクト解決は、これから追加していきます。
+
+### リモートは「もう 1 つのリポジトリ」です
+
+向こうのコミットは、**fetch するまでこちらのグラフに存在しません**。
+見えていないのではなく、まだ持っていません。サイトもそのとおりに作ってあり、
+`teammate` で向こうを進めても、グラフは 1 ミリも動きません。
+
+```bash
+git remote add origin <url>   # 名前を付けるだけ。まだ通信しない
+git push origin main          # 送る。origin/main も一緒に動く
+teammate 2                    # 誰かが向こうへ 2 つコミットした（グラフは変わらない）
+git fetch origin              # 取ってくる。origin/main は動くが main は動かない
+git pull origin main          # fetch + merge。今度は main も動く
+```
+
+`origin/main` は**リモート追跡ブランチ**で、「最後に見たとき向こうがどこを指していたか」の記録です。
+自分では動きません。ここが古いままなのが、pull を忘れた状態です。
 
 ### やらかしても戻れます
 

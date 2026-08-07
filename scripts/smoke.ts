@@ -297,6 +297,56 @@ async function main(): Promise<void> {
       tipBeforeLoss,
     );
 
+    // ---- リモート ----
+    await type(page, 'git switch main');
+    await type(page, 'git remote add origin https://example.com/repo.git');
+    check('リモートパネルが出る', await page.locator('[data-pane="remote"]').count(), 1);
+
+    await type(page, 'git push origin main');
+    check(
+      'push で origin/main が現れる',
+      await countEventually(page, '[data-ref="remote:origin/main"]', 1),
+      1,
+    );
+
+    // 同僚が進めても、こちらのグラフは変わらない
+    const beforeTeammate = await page.locator('[data-commit]').count();
+    await type(page, 'teammate 2');
+    check(
+      'teammate ではグラフが変わらない',
+      await page.locator('[data-commit]').count(),
+      beforeTeammate,
+    );
+    check(
+      'まだ持っていないと知らせる',
+      await page.locator('[data-pane="remote"]').getByText('まだ持っていないコミット').count(),
+      1,
+    );
+
+    // fetch は取ってくるだけ。手元の枝は動かない
+    const mainBeforeFetch = await page.locator('[data-ref="ref:main"]').getAttribute('data-ref-target');
+    await type(page, 'git fetch origin');
+    check(
+      'fetch でコミットが増える',
+      await countEventually(page, '[data-commit]', beforeTeammate + 2),
+      beforeTeammate + 2,
+    );
+    check(
+      'fetch では main が動かない',
+      await page.locator('[data-ref="ref:main"]').getAttribute('data-ref-target'),
+      mainBeforeFetch,
+    );
+
+    // pull で初めて main が動く
+    await type(page, 'git pull origin main');
+    const mainAfterPull = await page.locator('[data-ref="ref:main"]').getAttribute('data-ref-target');
+    check('pull で main が動く', mainAfterPull !== mainBeforeFetch, true);
+    check(
+      'pull のあと main と origin/main が揃う',
+      mainAfterPull,
+      await page.locator('[data-ref="remote:origin/main"]').getAttribute('data-ref-target'),
+    );
+
     check('コンソールにエラーが出ていない', consoleErrors, []);
 
     // アニメーションを減らす設定でも、中身は同じように出ること
