@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <rect width="32" height="32" rx="7" fill="#0a0a12" />
+  <!-- 小枝: 幹から 1 本だけ枝分かれし、先に 3 つのコミットが実る -->
+  <g fill="none" stroke="#4fd6ff" stroke-width="2.4" stroke-linecap="round">
+    <path d="M10 26 L10 13" />
+    <path d="M10 17 Q10 11 16 11 L22 11" />
+  </g>
+  <circle cx="10" cy="26" r="3.1" fill="#4fd6ff" />
+  <circle cx="10" cy="17" r="3.1" fill="#4fd6ff" />
+  <circle cx="22" cy="11" r="3.1" fill="#ffd166" />
+</svg>

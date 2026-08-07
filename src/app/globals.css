@@ -1,0 +1,210 @@
+@import 'tailwindcss';
+
+/*
+ * 設計方針（隣の webgl_manabe と揃える。崩さないこと）
+ *   ネオンは「光る線」にだけ使い、「読む文字」には一切かけない。
+ *   - 本文にグロー・グラデーション・高彩度色を使わない
+ *   - 本文 7:1 / 補助テキスト 4.5:1 以上のコントラスト比を保つ
+ *   - ネオン色は面ではなく線・枠・アイコンに乗せる
+ *   - 色を唯一の情報チャネルにしない（ラベル・線種・文言でも区別する）
+ *
+ * ウェブフォントは読み込まない。端末の日本語フォントに任せて、
+ * ビルド時のネットワーク依存とリポジトリ内のバイナリをゼロに保つ。
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* 面と文字 */
+  --bg: #0a0a12;
+  --bg-elev: #12121f;
+  --bg-sunken: #07070e;
+  --bg-inset: #0d0d18;
+  --text: #e8e8f2;
+  --text-muted: #9a9ab0;
+  --border: #26263c;
+  --border-lit: #3a3a5c;
+
+  /* ネオン（線・発光専用） */
+  --neon-cyan: #4fd6ff;
+  --neon-violet: #b57bff;
+  --neon-lime: #7cf5a0;
+  --neon-amber: #ffd166;
+  --neon-rose: #ff6b8a;
+
+  --tint-cyan: rgb(79 214 255 / 9%);
+  --tint-violet: rgb(181 123 255 / 9%);
+  --tint-lime: rgb(124 245 160 / 9%);
+  --tint-amber: rgb(255 209 102 / 9%);
+  --tint-rose: rgb(255 107 138 / 9%);
+
+  /*
+   * Git の意味に色を固定する。サイト全体でこの対応を変えない。
+   *   コミット = 無彩色 / ブランチ = シアン / HEAD = アンバー
+   *   タグ = バイオレット / detached = ローズ / リモート = ライム
+   */
+  --commit: #c9c9de;
+  --commit-dim: #5a5a78;
+  --branch: var(--neon-cyan);
+  --head: var(--neon-amber);
+  --tag: var(--neon-violet);
+  --detached: var(--neon-rose);
+  --remote: var(--neon-lime);
+
+  /* 3 領域。add / commit がどこを書き換えたかを、この色で光らせる */
+  --area-working: var(--neon-rose);
+  --area-index: var(--neon-amber);
+  --area-repo: var(--neon-lime);
+
+  --font-sans:
+    system-ui, -apple-system, 'Hiragino Kaku Gothic ProN', 'Yu Gothic', 'Noto Sans JP', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Noto Sans Mono', monospace;
+
+  --radius: 10px;
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 3%) inset, 0 8px 24px -18px rgb(0 0 0 / 90%);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #f7f7fb;
+  --bg-elev: #ffffff;
+  --bg-sunken: #eeeef5;
+  --bg-inset: #f1f1f7;
+  --text: #16161f;
+  --text-muted: #4a4a60;
+  --border: #d5d5e2;
+  --border-lit: #b6b6cb;
+
+  /* 同じ色相のまま暗く・低彩度にして、白背景でも読める明度に落とす */
+  --neon-cyan: #0b6f96;
+  --neon-violet: #6b3fb8;
+  --neon-lime: #17794a;
+  --neon-amber: #8a6100;
+  --neon-rose: #b32448;
+
+  --tint-cyan: rgb(11 111 150 / 8%);
+  --tint-violet: rgb(107 63 184 / 8%);
+  --tint-lime: rgb(23 121 74 / 8%);
+  --tint-amber: rgb(138 97 0 / 8%);
+  --tint-rose: rgb(179 36 72 / 8%);
+
+  --commit: #3a3a52;
+  --commit-dim: #9a9ab5;
+
+  --shadow-card: 0 1px 2px rgb(20 20 40 / 6%), 0 8px 24px -20px rgb(20 20 40 / 40%);
+}
+
+/*
+ * inline を付けると、生成されるユーティリティが値をコピーせず var() をそのまま参照する。
+ * これがないと data-theme を切り替えても Tailwind のクラスが暗いままになる。
+ */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-elev: var(--bg-elev);
+  --color-sunken: var(--bg-sunken);
+  --color-inset: var(--bg-inset);
+  --color-fg: var(--text);
+  --color-muted: var(--text-muted);
+  --color-line: var(--border);
+  --color-line-lit: var(--border-lit);
+
+  --color-cyan-neon: var(--neon-cyan);
+  --color-violet-neon: var(--neon-violet);
+  --color-lime-neon: var(--neon-lime);
+  --color-amber-neon: var(--neon-amber);
+  --color-rose-neon: var(--neon-rose);
+
+  --color-tint-cyan: var(--tint-cyan);
+  --color-tint-violet: var(--tint-violet);
+  --color-tint-lime: var(--tint-lime);
+  --color-tint-amber: var(--tint-amber);
+  --color-tint-rose: var(--tint-rose);
+
+  --color-commit: var(--commit);
+  --color-branch: var(--branch);
+  --color-head: var(--head);
+  --color-tag: var(--tag);
+  --color-detached: var(--detached);
+  --color-remote: var(--remote);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-card: var(--radius);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  line-height: 1.9;
+  letter-spacing: 0.02em;
+  font-feature-settings: 'palt' 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---- Shiki（rehype-pretty-code）---- */
+
+/*
+ * ダーク・ライトの 2 テーマをビルド時に焼き込んである。
+ * 実行時のハイライト処理はゼロで、data-theme に応じて色変数だけ差し替える。
+ */
+:root[data-theme='dark'] pre[data-theme],
+:root[data-theme='dark'] code[data-theme],
+:root[data-theme='dark'] pre span,
+:root[data-theme='dark'] code span {
+  color: var(--shiki-dark);
+  font-style: var(--shiki-dark-font-style);
+  font-weight: var(--shiki-dark-font-weight);
+  text-decoration: var(--shiki-dark-text-decoration);
+}
+
+:root[data-theme='light'] pre[data-theme],
+:root[data-theme='light'] code[data-theme],
+:root[data-theme='light'] pre span,
+:root[data-theme='light'] code span {
+  color: var(--shiki-light);
+  font-style: var(--shiki-light-font-style);
+  font-weight: var(--shiki-light-font-weight);
+  text-decoration: var(--shiki-light-text-decoration);
+}
+
+figure[data-rehype-pretty-code-figure] pre {
+  overflow-x: auto;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.75;
+}
+
+figure[data-rehype-pretty-code-figure] [data-rehype-pretty-code-title] {
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--bg-inset);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+figure[data-rehype-pretty-code-figure] [data-rehype-pretty-code-title] + pre {
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+
+/* ---- アニメーションを減らす設定を尊重する ---- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
