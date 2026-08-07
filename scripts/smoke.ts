@@ -215,6 +215,57 @@ async function main(): Promise<void> {
       1,
     );
 
+    // ---- rebase ----
+    // 分岐を作り直してから、feature を main の上へ置き直す
+    await type(page, 'git switch feature');
+    await type(page, 'git commit -m 枝をもう一歩');
+    const beforeRebase = await page.locator('[data-commit]').count();
+
+    await type(page, 'git rebase main');
+    check(
+      'rebase でコピーが増え、元も残る',
+      (await page.locator('[data-commit]').count()) > beforeRebase,
+      true,
+    );
+    check(
+      '指されなくなったコミットの凡例が出る',
+      await page.getByText('どの枝からも辿れないコミット', { exact: false }).count(),
+      1,
+    );
+
+    // ---- revert ----
+    const beforeRevert = await page.locator('[data-commit]').count();
+    await type(page, 'git revert HEAD');
+    check(
+      'revert はコミットを 1 つ足す',
+      await countEventually(page, '[data-commit]', beforeRevert + 1),
+      beforeRevert + 1,
+    );
+
+    // ---- stash ----
+    await type(page, 'touch wip.txt');
+    const graphBeforeStash = await page.locator('[data-commit]').count();
+    await type(page, 'git stash');
+    check(
+      'stash で作業ディレクトリが空になる',
+      await page.locator('[data-pane="workingDir"]').getByText('変更はありません').count(),
+      1,
+    );
+    check('stash パネルが出る', await page.locator('[data-pane="stash"]').count(), 1);
+    check(
+      'stash でグラフは変わらない',
+      await page.locator('[data-commit]').count(),
+      graphBeforeStash,
+    );
+
+    await type(page, 'git stash pop');
+    check(
+      'pop で作業ディレクトリに戻る',
+      await page.locator('[data-pane="workingDir"] code').count(),
+      1,
+    );
+    check('stash パネルが消える', await countEventually(page, '[data-pane="stash"]', 0), 0);
+
     check('コンソールにエラーが出ていない', consoleErrors, []);
 
     // アニメーションを減らす設定でも、中身は同じように出ること

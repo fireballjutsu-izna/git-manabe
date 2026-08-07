@@ -84,6 +84,32 @@ export function CommandButtons() {
         });
       }
 
+      // rebase は「分かれている枝の上」でしか意味がない
+      if (branch) {
+        for (const b of state.branches) {
+          if (b.name === branch) continue;
+          if (isAncestor(state, b.target, head)) continue;
+          suggestions.push({
+            label: `git rebase ${b.name}`,
+            line: `git rebase ${b.name}`,
+            hint: 'コピーし直す（id が変わる）',
+          });
+        }
+      }
+
+      suggestions.push({
+        label: 'git revert HEAD',
+        line: 'git revert HEAD',
+        hint: '打ち消すコミットを足す',
+      });
+
+      if (state.workingDir.length > 0 || state.index.length > 0) {
+        suggestions.push({ label: 'git stash', line: 'git stash', hint: '脇へどける' });
+      }
+      if (state.stash.length > 0) {
+        suggestions.push({ label: 'git stash pop', line: 'git stash pop', hint: '戻す' });
+      }
+
       if (state.head.type === 'detached' && state.branches.length > 0) {
         suggestions.push({
           label: `git switch ${state.branches[0].name}`,

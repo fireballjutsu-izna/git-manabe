@@ -56,6 +56,22 @@ export interface FileState {
   status: FileStatus;
 }
 
+/**
+ * 退避した作業。
+ *
+ * stash は 3 領域だけを動かし、コミットは 1 つも作らない。
+ * 「コミットせずに片付ける」という、履歴に出ない操作があることを見せるために持つ。
+ */
+export interface StashEntry {
+  /** state.seq 由来。新しいものほど大きい。 */
+  id: number;
+  message: string;
+  index: FileState[];
+  workingDir: FileState[];
+  /** どのコミットの上で退避したか。 */
+  base: string | null;
+}
+
 /** HEAD が動いた記録。reset をやらかしたあとの復元（フェーズ5）で効いてくる。 */
 export interface ReflogEntry {
   seq: number;
@@ -88,6 +104,8 @@ export interface RepoState {
   workingDir: FileState[];
   /** 一度でもコミットされたことのあるパス。untracked と modified を区別するために持つ。 */
   tracked: string[];
+  /** 退避した作業。新しいものが末尾（stash@{0} は最後の要素）。 */
+  stash: StashEntry[];
   reflog: ReflogEntry[];
   /** id の採番と createdAt の元になる単調カウンタ。Math.random() は使わない。 */
   seq: number;

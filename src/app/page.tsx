@@ -83,9 +83,33 @@ export default function HomePage() {
               <code className="font-mono">--hard</code> で、どの領域まで巻き添えにするかが変わる
             </span>
           </li>
+          <li className="flex gap-3">
+            <code className="mt-0.5 shrink-0 rounded border border-line bg-inset px-1.5 font-mono text-xs text-muted">
+              git rebase
+            </code>
+            <span className="text-sm">
+              枝ごと別の土台の上へコピーし直す。中身は同じでも id が変わる
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <code className="mt-0.5 shrink-0 rounded border border-line bg-inset px-1.5 font-mono text-xs text-muted">
+              git revert
+            </code>
+            <span className="text-sm">
+              打ち消すコミットを新しく積む。reset と違い、履歴は 1 つも消えない
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <code className="mt-0.5 shrink-0 rounded border border-line bg-inset px-1.5 font-mono text-xs text-muted">
+              git stash
+            </code>
+            <span className="text-sm">
+              コミットせずに作業を脇へどける。唯一、グラフが変わらないコマンド
+            </span>
+          </li>
         </ul>
         <p className="mt-5 text-sm text-muted">
-          rebase・cherry-pick・revert・stash・reflog・リモートは、これから追加していきます。
+          cherry-pick も使えます。reflog・リモート・コンフリクト解決は、これから追加していきます。
         </p>
       </section>
     </div>

@@ -11,6 +11,7 @@ export function emptyState(): RepoState {
     index: [],
     workingDir: [],
     tracked: [],
+    stash: [],
     reflog: [],
     seq: 0,
   };
@@ -171,6 +172,27 @@ export function pathsIn(state: RepoState, ids: string[]): string[] {
     for (const p of state.commits[id]?.paths ?? []) paths.add(p);
   }
   return [...paths];
+}
+
+/**
+ * いずれかの ref（枝・タグ・HEAD）から辿れるコミット。
+ *
+ * ここに入らないコミットは「どこからも指されていない」＝ 迷子。
+ * rebase でコピー元が置き去りになったときや、reset で切り離したときに出る。
+ * 消えたわけではないことを見せたいので、グラフでは薄く描く。
+ */
+export function reachableCommits(state: RepoState): Set<string> {
+  const roots = [
+    ...state.branches.map((b) => b.target),
+    ...state.tags.map((t) => t.target),
+    headCommitId(state),
+  ].filter((id): id is string => id !== null);
+
+  const seen = new Set<string>();
+  for (const root of roots) {
+    for (const id of ancestorsOf(state, root)) seen.add(id);
+  }
+  return seen;
 }
 
 /**

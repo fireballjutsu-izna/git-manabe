@@ -37,10 +37,28 @@ Learn Git Branching と Explain Git with D3 が疑似 Git を選んでいるの�
 | `git checkout` / `git switch` | HEAD を別の枝へ移す。コミットを直接指すと detached HEAD になる |
 | `git merge <branch>` | 分かれた枝を 1 つに戻す。fast-forward と 3-way（親が 2 つのマージコミット） |
 | `git reset [--soft\|--mixed\|--hard] [<commit>]` | 枝を巻き戻す。`HEAD~1` のような指定も使える |
+| `git rebase <upstream>` | 枝ごと別の土台の上へ**コピーし直す**。id が変わる |
+| `git cherry-pick <commit>...` | 指定したコミットだけを、いまいる場所へコピーする |
+| `git revert <commit>` | 打ち消すコミットを**新しく積む**。履歴は消えない |
+| `git stash` / `pop` / `apply` / `list` / `drop` | コミットせずに作業を脇へどける。グラフは変わらない |
 | `git status` / `git log` | いまの 3 領域と、コミットの履歴を見る |
 | `touch <path>` / `edit <path>` | **Git のコマンドではありません。**作業ディレクトリに変更を作るための、このサイト独自のコマンドです |
 
-rebase・cherry-pick・revert・stash・reflog・リモート・コンフリクト解決は、これから追加していきます。
+reflog・リモート・コンフリクト解決は、これから追加していきます。
+
+### 履歴を書き換える 4 つと、その違い
+
+| | 元のコミットは | 履歴は | 共有済みの履歴に使えるか |
+| --- | --- | --- | --- |
+| `merge` | 残る | 増える（合流点が 1 つ） | 使える |
+| `rebase` | 残るが、指されなくなる | **作り直される（id が変わる）** | 使えない |
+| `cherry-pick` | 残る | 増える（コピーが 1 つ） | 使える |
+| `revert` | 残る | 増える（打ち消しが 1 つ） | 使える |
+| `reset` | 残るが、指されなくなる | **後ろへ動く** | 使えない |
+| `stash` | — | **変わらない** | — |
+
+`rebase` と `reset` でどこからも指されなくなったコミットは、**消えてはいません**。
+グラフでは破線・薄い色で描き続けるので、「作り直された／切り離された」ことが目で分かります。
 
 ### reset の 3 つのモード
 

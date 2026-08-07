@@ -1,7 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { layoutGraph, type RepoState } from '@/lib/git-engine';
+import { layoutGraph, reachableCommits, type RepoState } from '@/lib/git-engine';
 
 /* 格子 1 マスの大きさ。数十コミット規模を想定した寸法にしている。 */
 const COL_W = 104;
@@ -27,6 +27,15 @@ interface Placed {
 }
 
 const px = (x: number): number => PAD_X + x * COL_W;
+
+/**
+ * バッジのおおよその幅。
+ * SVG の中で実測するのは高くつくので、文字数から見積もる。
+ * 描画（RefBadge）と余白の計算で、必ず同じ値を使う。
+ */
+function badgeWidth(text: string): number {
+  return Math.max(38, text.length * 7.4 + 14);
+}
 
 /** メッセージは長いと隣とぶつかるので、この長さで丸める。 */
 function short(message: string): string {
@@ -66,16 +75,41 @@ export function CommitGraph({ state }: { state: RepoState }) {
   const maxStack = labels.reduce((m, l) => Math.max(m, l.stack), 0);
   const top = padTop(maxStack);
 
+  /*
+   * バッジは node より横に広い。
+   * 端の列に長い名前が付くと枠から出て切れるので、はみ出すぶんだけ左右を広げる。
+   */
+  const column = new Map(layout.nodes.map((n) => [n.id, n.x]));
+  let overhangLeft = 0;
+  let overhangRight = 0;
+  for (const label of labels) {
+    const x = column.get(label.target);
+    if (x === undefined) continue;
+    const half = badgeWidth(label.text) / 2;
+    overhangLeft = Math.max(overhangLeft, half - PAD_X);
+    overhangRight = Math.max(overhangRight, half - PAD_X + (x - (layout.cols - 1)) * COL_W);
+  }
+  overhangLeft = Math.max(0, overhangLeft);
+  overhangRight = Math.max(0, overhangRight);
+
   const placed = new Map<string, Placed>();
   for (const n of layout.nodes) {
-    placed.set(n.id, { id: n.id, cx: px(n.x), cy: top + n.y * LANE_H });
+    placed.set(n.id, { id: n.id, cx: overhangLeft + px(n.x), cy: top + n.y * LANE_H });
   }
 
-  const width = PAD_X * 2 + (layout.cols - 1) * COL_W;
+  const width = overhangLeft + PAD_X * 2 + (layout.cols - 1) * COL_W + overhangRight;
   const height = top + PAD_BOTTOM + (layout.lanes - 1) * LANE_H;
 
   const headOid = state.head.type === 'detached' ? state.head.oid : null;
   const headBranch = state.head.type === 'branch' ? state.head.ref : null;
+
+  /*
+   * どの ref からも辿れなくなったコミット。
+   * rebase でコピー元が置き去りになったときと、reset で切り離したときに出る。
+   * 「消えたのではなく、指されなくなっただけ」を見せたいので、消さずに薄く描く。
+   */
+  const reachable = reachableCommits(state);
+  const orphaned = layout.nodes.filter((n) => !reachable.has(n.id)).length;
 
   return (
     <div className="overflow-x-auto rounded-card border border-line bg-sunken">
@@ -103,6 +137,7 @@ export function CommitGraph({ state }: { state: RepoState }) {
                   stroke="var(--commit-dim)"
                   strokeWidth={2}
                   strokeLinecap="round"
+                  strokeOpacity={reachable.has(e.to) ? 1 : 0.34}
                   initial={reduce ? false : { pathLength: 0, opacity: 0 }}
                   animate={{ pathLength: 1, opacity: 1 }}
                   exit={{ opacity: 0 }}
@@ -121,12 +156,13 @@ export function CommitGraph({ state }: { state: RepoState }) {
             const isHead = headOid === n.id || (headBranch && branchTarget(state, headBranch) === n.id);
             // 親が 2 つ ＝ マージコミット。二重丸にして、線が 2 本入る先を目立たせる
             const isMerge = (commit?.parents.length ?? 0) > 1;
+            const isOrphan = !reachable.has(n.id);
             return (
               <motion.g
                 key={n.id}
                 data-commit={n.id}
                 initial={reduce ? false : { opacity: 0, scale: 0.4 }}
-                animate={{ opacity: 1, scale: 1 }}
+                animate={{ opacity: isOrphan ? 0.4 : 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.4 }}
                 transition={spring}
                 style={{ transformOrigin: `${p.cx}px ${p.cy}px` }}
@@ -139,6 +175,8 @@ export function CommitGraph({ state }: { state: RepoState }) {
                   fill="var(--bg-elev)"
                   stroke={isHead ? 'var(--head)' : 'var(--commit)'}
                   strokeWidth={isHead ? 3 : 2}
+                  // 破線にして、色が見分けにくくても迷子だと分かるようにする
+                  strokeDasharray={isOrphan ? '4 3' : undefined}
                 />
                 {isMerge && (
                   <motion.circle
@@ -168,7 +206,9 @@ export function CommitGraph({ state }: { state: RepoState }) {
                   {short(commit?.message ?? '')}
                 </text>
                 <title>
-                  {`${n.id}  ${commit?.message ?? ''}${isMerge ? '（マージコミット・親が 2 つ）' : ''}`}
+                  {`${n.id}  ${commit?.message ?? ''}${isMerge ? '（マージコミット・親が 2 つ）' : ''}${
+                    isOrphan ? '（どの枝からも辿れません）' : ''
+                  }`}
                 </title>
               </motion.g>
             );
@@ -198,7 +238,10 @@ export function CommitGraph({ state }: { state: RepoState }) {
         </AnimatePresence>
       </svg>
 
-      <Legend hasMerge={Object.values(state.commits).some((c) => c.parents.length > 1)} />
+      <Legend
+        hasMerge={Object.values(state.commits).some((c) => c.parents.length > 1)}
+        orphaned={orphaned}
+      />
     </div>
   );
 }
@@ -208,7 +251,7 @@ export function CommitGraph({ state }: { state: RepoState }) {
  * 色だけで意味を伝えると、色が見分けにくい人に何も伝わらない。
  * 形と言葉でも同じことを言っておく。
  */
-function Legend({ hasMerge }: { hasMerge: boolean }) {
+function Legend({ hasMerge, orphaned }: { hasMerge: boolean; orphaned: number }) {
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line px-3 py-2 text-[11px] text-muted">
       <li>
@@ -221,6 +264,12 @@ function Legend({ hasMerge }: { hasMerge: boolean }) {
         <span className="text-detached">▨</span> detached HEAD（枝の外）
       </li>
       {hasMerge && <li>◎ マージコミット（親が 2 つ）</li>}
+      {orphaned > 0 && (
+        <li>
+          <span className="opacity-40">◌</span> 破線・薄い ＝ どの枝からも辿れないコミット（
+          {orphaned} 件・消えてはいません）
+        </li>
+      )}
     </ul>
   );
 }
@@ -295,8 +344,7 @@ const TONE: Record<Tone, { stroke: string; fill: string; text: string; dashed?: 
 /** バッジ 1 つ。原点が中心の下端になるように描く。 */
 function RefBadge({ text, tone }: { text: string; tone: Tone }) {
   const style = TONE[tone];
-  // 日本語が混ざらない前提でだいたいの幅を出す。SVG の中で測るのは高くつく。
-  const w = Math.max(38, text.length * 7.4 + 14);
+  const w = badgeWidth(text);
   return (
     <g>
       <rect
