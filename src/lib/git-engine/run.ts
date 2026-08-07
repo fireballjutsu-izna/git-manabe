@@ -16,6 +16,7 @@ import { log } from './commands/log';
 import { merge } from './commands/merge';
 import { cherryPick, revert } from './commands/pick';
 import { rebase } from './commands/rebase';
+import { reflog } from './commands/reflog';
 import { reset } from './commands/reset';
 import { stash } from './commands/stash';
 import { status } from './commands/status';
@@ -36,6 +37,7 @@ const GIT_HANDLERS: Record<string, Handler> = {
   'cherry-pick': cherryPick,
   revert,
   stash,
+  reflog,
   status,
   log,
 };

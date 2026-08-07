@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { emptyState, headCommitId, run } from '@/lib/git-engine';
+import {
+  emptyState,
+  headCommitId,
+  run,
+  GIT_COMMANDS,
+  PLANNED_COMMANDS,
+} from '@/lib/git-engine';
 import type { CommandResult, RepoState } from '@/lib/git-engine';
 
 /** コマンド列をまとめて流す。1 つでも失敗したら、その場で分かるようにする。 */
@@ -289,9 +295,16 @@ describe('git status / log', () => {
 
 describe('入力の間違いへの応答', () => {
   it('未実装のコマンドは「知らない」ではなく「まだ」と言う', () => {
-    // 実装したら、ここは残っている未実装コマンドに差し替える
-    const result = last(['git init', 'git commit -m one', 'git reflog']);
+    // 特定のコマンド名を書くと、それを実装したときにこのテストが落ちる。
+    // 「まだ実装していない」と宣言されているものを、宣言そのものから取る。
+    const planned = PLANNED_COMMANDS[0];
+    const result = last(['git init', 'git commit -m one', `git ${planned}`]);
     expect(result.error).toContain('まだこのサイトに入っていません');
+  });
+
+  it('使えるコマンドと、まだのコマンドは重ならない', () => {
+    const both = GIT_COMMANDS.filter((c) => (PLANNED_COMMANDS as readonly string[]).includes(c));
+    expect(both).toEqual([]);
   });
 
   it('打ち間違いには「もしかして」を出す', () => {

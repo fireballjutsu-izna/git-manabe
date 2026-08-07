@@ -38,6 +38,7 @@ export const GIT_COMMANDS = [
   'cherry-pick',
   'revert',
   'stash',
+  'reflog',
   'status',
   'log',
 ] as const;
@@ -50,7 +51,6 @@ export const HELPER_COMMANDS = ['touch', 'edit'] as const;
  * 打たれたときに「知らない」ではなく「まだ」と返すために持っておく。
  */
 export const PLANNED_COMMANDS = [
-  'reflog',
   'tag',
   'remote',
   'fetch',
