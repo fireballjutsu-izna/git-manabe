@@ -2,7 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { currentBranchName, headCommitId, type Area, type RepoState } from '@/lib/git-engine';
+import {
+  aheadBehind,
+  currentBranchName,
+  headCommitId,
+  type Area,
+  type RepoState,
+} from '@/lib/git-engine';
 
 /**
  * 作業ディレクトリ / ステージ / リポジトリ の 3 領域。
@@ -115,6 +121,8 @@ export function AreaPanes({
         )}
       </div>
 
+      {state.remotes.length > 0 && <RemotePane state={state} />}
+
       {/*
         stash はグラフにも 3 領域にも現れない ― コミットを作らず、脇へどけるだけ。
         置き場所がないと「消えた」と誤解されるので、退避中だけここに出す。
@@ -145,6 +153,64 @@ export function AreaPanes({
           </p>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * リモートの様子。
+ *
+ * 「何個進んでいて、何個遅れているか」を出す。
+ * push が通るのか pull が要るのかは、結局この 2 つの数で決まる。
+ * 向こうだけが持っているコミットは、fetch するまでグラフに出ないので、
+ * ここが唯一「まだ見えていないものがある」と知らせる場所になる。
+ */
+function RemotePane({ state }: { state: RepoState }) {
+  const branch = currentBranchName(state);
+  const local = branch ? (state.branches.find((b) => b.name === branch)?.target ?? null) : null;
+
+  return (
+    <div data-pane="remote" className="rounded-card border border-remote bg-tint-lime px-3 py-2 text-xs">
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-bold text-remote">リモート</span>
+        <span className="font-mono text-[11px] text-muted">
+          {state.remotes.map((r) => r.name).join(', ')}
+        </span>
+      </div>
+
+      <ul className="mt-1.5 space-y-1">
+        {state.remotes.flatMap((remote) =>
+          remote.branches.map((rb) => {
+            const name = `${remote.name}/${rb.name}`;
+            const known = state.remoteBranches.find((t) => t.name === name)?.target ?? null;
+            // 手元がまだ fetch していないぶんは、追跡ブランチと向こうの先端のずれで分かる
+            const unfetched = known !== rb.target;
+            const { ahead, behind } =
+              branch === rb.name ? aheadBehind(state, local, known) : { ahead: 0, behind: 0 };
+
+            return (
+              <li key={name}>
+                <div className="flex items-center justify-between gap-2">
+                  <code className="truncate font-mono text-[11px] text-fg">{name}</code>
+                  {branch === rb.name && (
+                    <span className="shrink-0 text-[10px] text-muted">
+                      進み {ahead} / 遅れ {behind}
+                    </span>
+                  )}
+                </div>
+                {unfetched && (
+                  <p className="leading-relaxed text-muted">
+                    向こうに、まだ持っていないコミットがあります。git fetch で見えます。
+                  </p>
+                )}
+              </li>
+            );
+          }),
+        )}
+        {state.remotes.every((r) => r.branches.length === 0) && (
+          <li className="text-muted">まだ何も送っていません（git push）。</li>
+        )}
+      </ul>
     </div>
   );
 }

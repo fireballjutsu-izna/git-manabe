@@ -72,6 +72,21 @@ export interface StashEntry {
   base: string | null;
 }
 
+/**
+ * もう 1 つのリポジトリ。
+ *
+ * 手元とは別の入れ物として持つ。これが要点で、
+ * **fetch するまで、向こうのコミットはこちらのグラフに存在しない**。
+ * 「見えていないだけ」ではなく「まだ持っていない」を、そのまま表す。
+ */
+export interface Remote {
+  name: string;
+  url: string;
+  /** 向こうが持っているコミット。fetch でこちらへ複製される。 */
+  commits: Record<string, Commit>;
+  branches: Ref[];
+}
+
 /** HEAD が動いた記録。reset をやらかしたあとの復元（フェーズ5）で効いてくる。 */
 export interface ReflogEntry {
   seq: number;
@@ -106,6 +121,14 @@ export interface RepoState {
   tracked: string[];
   /** 退避した作業。新しいものが末尾（stash@{0} は最後の要素）。 */
   stash: StashEntry[];
+  remotes: Remote[];
+  /**
+   * リモート追跡ブランチ（origin/main など）。
+   *
+   * 「最後に fetch / push したとき、向こうの枝がどこを指していたか」の記録で、
+   * 自分では動かない。ここが古いままなのが、pull を忘れた状態。
+   */
+  remoteBranches: Ref[];
   reflog: ReflogEntry[];
   /** id の採番と createdAt の元になる単調カウンタ。Math.random() は使わない。 */
   seq: number;

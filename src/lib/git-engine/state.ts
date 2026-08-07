@@ -1,4 +1,13 @@
-import type { Area, Commit, CommandResult, FileState, Head, Ref, RepoState } from './types';
+import type {
+  Area,
+  Commit,
+  CommandResult,
+  FileState,
+  Head,
+  Ref,
+  Remote,
+  RepoState,
+} from './types';
 
 /** `git init` の前の状態。サンドボックスはここから始まる。 */
 export function emptyState(): RepoState {
@@ -12,6 +21,8 @@ export function emptyState(): RepoState {
     workingDir: [],
     tracked: [],
     stash: [],
+    remotes: [],
+    remoteBranches: [],
     reflog: [],
     seq: 0,
   };
@@ -34,11 +45,18 @@ function hashId(seq: number): string {
   return h.toString(16).padStart(8, '0').slice(0, 7);
 }
 
-/** 未使用の id を返す。7 桁なので実質ぶつからないが、念のため衝突を避ける。 */
+/**
+ * 未使用の id を返す。
+ * リモート側のコミットとも突き合わせる ― fetch で持ってきたときに
+ * 手元の別コミットと id がぶつかると、履歴が壊れる。
+ */
 export function nextCommitId(state: RepoState): string {
+  const taken = (id: string): boolean =>
+    state.commits[id] !== undefined || state.remotes.some((r) => r.commits[id] !== undefined);
+
   let n = state.seq;
   let id = hashId(n);
-  while (state.commits[id]) {
+  while (taken(id)) {
     n += 1;
     id = hashId(n);
   }
@@ -63,10 +81,48 @@ export function findBranch(state: RepoState, name: string): Ref | undefined {
 }
 
 /** そのコミットを指している ref をすべて集める（グラフのラベル用）。 */
-export function refsAt(state: RepoState, commitId: string): { branches: string[]; tags: string[] } {
+export function refsAt(
+  state: RepoState,
+  commitId: string,
+): { branches: string[]; tags: string[]; remotes: string[] } {
   return {
     branches: state.branches.filter((b) => b.target === commitId).map((b) => b.name),
     tags: state.tags.filter((t) => t.target === commitId).map((t) => t.name),
+    remotes: state.remoteBranches.filter((r) => r.target === commitId).map((r) => r.name),
+  };
+}
+
+export function findRemote(state: RepoState, name: string): Remote | undefined {
+  return state.remotes.find((r) => r.name === name);
+}
+
+/** リモート追跡ブランチ（origin/main）を作る・移す。 */
+export function setRemoteBranch(state: RepoState, name: string, target: string): RepoState {
+  const exists = state.remoteBranches.some((r) => r.name === name);
+  return {
+    ...state,
+    remoteBranches: exists
+      ? state.remoteBranches.map((r) => (r.name === name ? { ...r, target } : r))
+      : [...state.remoteBranches, { name, target }],
+  };
+}
+
+/**
+ * 手元がリモートより何個進んでいて、何個遅れているか。
+ * `ahead 2, behind 1` の正体で、push できるか pull が要るかがこれで決まる。
+ */
+export function aheadBehind(
+  state: RepoState,
+  localTip: string | null,
+  remoteTip: string | null,
+): { ahead: number; behind: number } {
+  if (!localTip) return { ahead: 0, behind: remoteTip ? ancestorsOf(state, remoteTip).size : 0 };
+  if (!remoteTip) return { ahead: ancestorsOf(state, localTip).size, behind: 0 };
+  const fromLocal = ancestorsOf(state, localTip);
+  const fromRemote = ancestorsOf(state, remoteTip);
+  return {
+    ahead: [...fromLocal].filter((id) => !fromRemote.has(id)).length,
+    behind: [...fromRemote].filter((id) => !fromLocal.has(id)).length,
   };
 }
 
@@ -107,6 +163,10 @@ export function resolveRevision(state: RepoState, spec: string): string | null |
   if (branch) return branch.target;
   const tag = state.tags.find((t) => t.name === spec);
   if (tag) return tag.target;
+  // origin/main のような追跡ブランチも、ここから引ける。
+  // git merge origin/main や git switch -c x origin/main を通すために要る。
+  const remote = state.remoteBranches.find((r) => r.name === spec);
+  if (remote) return remote.target;
   return resolveCommit(state, spec);
 }
 
@@ -204,6 +264,8 @@ export function reachableCommits(state: RepoState): Set<string> {
   const roots = [
     ...state.branches.map((b) => b.target),
     ...state.tags.map((t) => t.target),
+    // origin/main も立派な ref。fetch しただけのコミットを迷子扱いしない
+    ...state.remoteBranches.map((r) => r.target),
     headCommitId(state),
   ].filter((id): id is string => id !== null);
 

@@ -17,6 +17,8 @@ import { merge } from './commands/merge';
 import { cherryPick, revert } from './commands/pick';
 import { rebase } from './commands/rebase';
 import { reflog } from './commands/reflog';
+import { remote, teammate } from './commands/remote';
+import { fetch, pull, push } from './commands/sync';
 import { reset } from './commands/reset';
 import { stash } from './commands/stash';
 import { status } from './commands/status';
@@ -38,6 +40,10 @@ const GIT_HANDLERS: Record<string, Handler> = {
   revert,
   stash,
   reflog,
+  remote,
+  push,
+  fetch,
+  pull,
   status,
   log,
 };
@@ -45,6 +51,7 @@ const GIT_HANDLERS: Record<string, Handler> = {
 const HELPER_HANDLERS: Record<string, Handler> = {
   touch,
   edit,
+  teammate,
 };
 
 /** 打ち間違いを拾って「もしかして」を出す。編集距離 1 までを近いとみなす。 */

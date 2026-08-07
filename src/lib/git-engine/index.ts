@@ -14,6 +14,7 @@ export type {
   Head,
   Ref,
   ReflogEntry,
+  Remote,
   RepoState,
   StashEntry,
 } from './types';
@@ -30,6 +31,8 @@ export {
   commitsBetween,
   pathsIn,
   reachableCommits,
+  aheadBehind,
+  findRemote,
 } from './state';
 export { run } from './run';
 export { parseLine, GIT_COMMANDS, HELPER_COMMANDS, PLANNED_COMMANDS } from './parse';

@@ -131,6 +131,47 @@ export function CommandButtons() {
         });
       }
 
+      // リモート。登録 → push → 同僚が進める → fetch/pull、の順に出す
+      if (state.remotes.length === 0) {
+        suggestions.push({
+          label: 'git remote add origin <url>',
+          line: 'git remote add origin https://example.com/repo.git',
+          hint: 'リモートを登録する',
+        });
+      } else if (branch) {
+        const remoteName = state.remotes[0].name;
+        const theirs = state.remotes[0].branches.find((b) => b.name === branch);
+        const known = state.remoteBranches.find((t) => t.name === `${remoteName}/${branch}`);
+
+        if (!theirs) {
+          suggestions.push({
+            label: `git push ${remoteName} ${branch}`,
+            line: `git push ${remoteName} ${branch}`,
+            hint: '向こうへ送る',
+          });
+        } else {
+          suggestions.push({ label: 'teammate 1', line: 'teammate 1', hint: '同僚が 1 つ進める' });
+          if (known?.target !== theirs.target) {
+            suggestions.push({
+              label: `git fetch ${remoteName}`,
+              line: `git fetch ${remoteName}`,
+              hint: '取ってくるだけ',
+            });
+            suggestions.push({
+              label: `git pull ${remoteName} ${branch}`,
+              line: `git pull ${remoteName} ${branch}`,
+              hint: '取ってきて取り込む',
+            });
+          } else if (known.target !== head) {
+            suggestions.push({
+              label: `git push ${remoteName} ${branch}`,
+              line: `git push ${remoteName} ${branch}`,
+              hint: '向こうへ送る',
+            });
+          }
+        }
+      }
+
       if (state.head.type === 'detached' && state.branches.length > 0) {
         suggestions.push({
           label: `git switch ${state.branches[0].name}`,

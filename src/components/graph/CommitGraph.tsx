@@ -262,6 +262,7 @@ export function CommitGraph({ state }: { state: RepoState }) {
         hasMerge={Object.values(state.commits).some((c) => c.parents.length > 1)}
         orphaned={orphaned}
         lanes={layout.lanes}
+        hasRemote={state.remoteBranches.length > 0}
       />
     </div>
   );
@@ -276,10 +277,12 @@ function Legend({
   hasMerge,
   orphaned,
   lanes,
+  hasRemote,
 }: {
   hasMerge: boolean;
   orphaned: number;
   lanes: number;
+  hasRemote: boolean;
 }) {
   return (
     <ul className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line px-3 py-2 text-[11px] text-muted">
@@ -292,6 +295,11 @@ function Legend({
       <li>
         <span className="text-detached">▨</span> detached HEAD（枝の外）
       </li>
+      {hasRemote && (
+        <li>
+          <span className="text-remote">■</span> リモート追跡（origin/…）
+        </li>
+      )}
       {lanes > 1 && <li>線の色 ＝ 流れの区別</li>}
       {hasMerge && <li>◎ マージコミット（親が 2 つ）</li>}
       {orphaned > 0 && (
@@ -315,7 +323,7 @@ function edgePath(from: Placed, to: Placed): string {
   return `M ${from.cx} ${from.cy} C ${mid} ${from.cy}, ${mid} ${to.cy}, ${to.cx} ${to.cy}`;
 }
 
-type Tone = 'branch' | 'head' | 'tag' | 'detached';
+type Tone = 'branch' | 'head' | 'tag' | 'detached' | 'remote';
 
 interface Label {
   key: string;
@@ -355,6 +363,10 @@ function labelsFor(state: RepoState): Label[] {
   for (const t of state.tags) {
     push(t.target, t.name, 'tag', `tag:${t.name}`);
   }
+  // origin/main。手元の枝より後ろにいることがあり、そのずれが「pull が要る」の正体
+  for (const r of state.remoteBranches) {
+    push(r.target, r.name, 'remote', `remote:${r.name}`);
+  }
 
   return labels;
 }
@@ -369,6 +381,7 @@ const TONE: Record<Tone, { stroke: string; fill: string; text: string; dashed?: 
     text: 'var(--detached)',
     dashed: true,
   },
+  remote: { stroke: 'var(--remote)', fill: 'var(--tint-lime)', text: 'var(--remote)' },
 };
 
 /** バッジ 1 つ。原点が中心の下端になるように描く。 */
