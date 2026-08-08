@@ -200,6 +200,20 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/*
+ * フォーカスの輪。
+ *
+ * ブラウザ既定の outline は色がテーマに追随しないので、暗い下地の上では
+ * ほとんど見えなくなる。キーボードで操作している人にとっては
+ * 「いまどこにいるか」が唯一の手がかりなので、自前で明るく描く。
+ * :focus-visible を使うので、マウスで押しただけでは出ない。
+ */
+:focus-visible {
+  outline: 2px solid var(--neon-cyan);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
 /* ---- Shiki（rehype-pretty-code）---- */
 
 /*

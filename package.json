@@ -12,7 +12,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "smoke": "node scripts/smoke.ts"
+    "smoke": "node scripts/smoke.ts",
+    "a11y": "node scripts/a11y.ts"
   },
   "dependencies": {
     "@mdx-js/loader": "^3.1.1",
@@ -36,6 +37,7 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "axe-core": "^4.13.0",
     "eslint": "^9.39.0",
     "eslint-config-next": "15.5.23",
     "playwright": "^1.62.0",

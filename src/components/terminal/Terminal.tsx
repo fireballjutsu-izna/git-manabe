@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { OutputAnnouncer } from './OutputAnnouncer';
 
 /**
  * xterm.js は window と document を前提にしているので、
@@ -17,5 +18,10 @@ const TerminalView = dynamic(() => import('./TerminalView'), {
 });
 
 export function Terminal() {
-  return <TerminalView />;
+  return (
+    <>
+      <TerminalView />
+      <OutputAnnouncer />
+    </>
+  );
 }

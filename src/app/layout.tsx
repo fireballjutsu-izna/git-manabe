@@ -32,6 +32,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
       </head>
       <body className="min-h-dvh antialiased">
+        {/*
+          見出しの前に、毎ページ同じリンクが 5 本並ぶ。
+          キーボードや読み上げで来た人が、そこを毎回抜けずに済むようにする。
+          ふだんは画面の外に置き、フォーカスが当たったときだけ出てくる。
+        */}
+        <a
+          href="#main"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded focus:border focus:border-cyan-neon focus:bg-elev focus:px-3 focus:py-2 focus:text-sm focus:text-fg focus:no-underline"
+        >
+          本文へスキップ
+        </a>
         <header className="sticky top-0 z-20 border-b border-line bg-bg/85 backdrop-blur">
           {/*
             狭い画面ではリンクが折り返して、高さ 14 の帯からはみ出す。
@@ -61,7 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
 
-        <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+        <main id="main" className="mx-auto max-w-6xl px-4 py-8">{children}</main>
 
         <footer className="mt-16 border-t border-line">
           <div className="mx-auto max-w-6xl px-4 py-8 text-xs leading-relaxed text-muted">
