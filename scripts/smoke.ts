@@ -470,6 +470,42 @@ async function main(): Promise<void> {
     check('404 から戻る道がある', await missing.locator('main a').count(), 3);
     await missing.close();
 
+    // ---- 入力欄 ----
+    // xterm への直接入力はスマートフォンでスペースが落ちるので、素の入力欄も置いてある
+    await page.goto(`${BASE}/sandbox/`, { waitUntil: 'networkidle' });
+    await page.locator('#command-input').waitFor({ timeout: 15_000 });
+    const field = page.locator('#command-input');
+    await field.fill('git init');
+    await page.getByRole('button', { name: '実行' }).click();
+    await page.waitForTimeout(400);
+    check(
+      '入力欄から実行できる',
+      (await page.locator('[data-pane="repo"]').innerText()).includes('まだリポジトリがありません'),
+      false,
+    );
+    await field.fill('git commit -m 空白を含む指定');
+    await field.press('Enter');
+    check('空白を含む行も通る', await countEventually(page, '[data-commit]', 1), 1);
+    await field.press('ArrowUp');
+    check('↑ で履歴を呼び戻せる', await field.inputValue(), 'git commit -m 空白を含む指定');
+
+    // ---- コマンドボタンの名前 ----
+    // 課題が名前を指定しているレベルでは、その名前が出ること
+    await page.goto(`${BASE}/levels/areas/`, { waitUntil: 'networkidle' });
+    await page.locator('#command-input').waitFor({ timeout: 15_000 });
+    check(
+      '課題の言うファイル名がボタンに出る',
+      await page.getByRole('button', { name: /touch hello\.txt/ }).count(),
+      1,
+    );
+    await page.goto(`${BASE}/levels/branch/`, { waitUntil: 'networkidle' });
+    await page.locator('#command-input').waitFor({ timeout: 15_000 });
+    check(
+      '課題の言う枝の名前がボタンに出る',
+      await page.getByRole('button', { name: /git branch feature$|git branch feature[^-]/ }).count(),
+      1,
+    );
+
     // ---- 記事 ----
     // 記事とレベルは同じ id で結ばれている。行き来できることを通しで見る
     await page.goto(`${BASE}/docs/`, { waitUntil: 'networkidle' });

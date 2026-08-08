@@ -18,6 +18,7 @@ export const LEVELS: Level[] = [
     setup: ['git init'],
     goal: ['git init', 'touch hello.txt', 'git add .', 'git commit -m はじめ'],
     check: (s) => s.tracked.includes('hello.txt') && s.index.length === 0,
+    suggest: { file: 'hello.txt' },
     hints: [
       'touch hello.txt でファイルを作れます（これは Git のコマンドではありません）。',
       'git add hello.txt でステージへ移ります。',
@@ -32,6 +33,7 @@ export const LEVELS: Level[] = [
     task: 'feature という枝を作り、そこへ移って 1 回コミットしてください。',
     setup: ['git init', 'git commit -m 根'],
     goal: ['git init', 'git commit -m 根', 'git switch -c feature', 'git commit -m 枝の上'],
+    suggest: { branch: 'feature' },
     hints: [
       'git branch feature で作れますが、HEAD は動きません。',
       'git switch feature で移れます。',

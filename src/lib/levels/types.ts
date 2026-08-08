@@ -26,6 +26,14 @@ export interface Level {
    * ステージの中身や stash のように、DAG の形に出ないものを見る。
    */
   check?: (state: RepoState) => boolean;
+  /**
+   * コマンドボタンに出す名前。
+   *
+   * 指定が無いと file-1.txt や feature-a のような自動生成の名前が出るが、
+   * 課題が「hello.txt を作り」と言っているのにボタンが file-1.txt を出すと、
+   * 押しても課題が終わらない。**課題文に出てくる名前をここに書き写す。**
+   */
+  suggest?: { file?: string; branch?: string };
   /** 上から順に開いていくヒント。 */
   hints: string[];
 }

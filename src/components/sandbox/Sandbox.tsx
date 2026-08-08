@@ -70,7 +70,7 @@ export function Sandbox() {
           */}
           <div className="min-w-0">
             <h2 className="mb-2 text-xs font-bold tracking-wide text-accent">
-              ターミナル（直接打つこともできます・↑↓ で履歴）
+              ターミナル（下の欄か、画面に直接打てます・↑↓ で履歴）
             </h2>
             <Terminal />
           </div>
