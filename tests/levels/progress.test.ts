@@ -4,8 +4,11 @@ import {
   emptyProgress,
   isCleared,
   markCleared,
+  markScenarioCleared,
   markStudied,
+  scenarioClearedCount,
   today,
+  type Progress,
 } from '@/lib/storage/progress';
 
 /**
@@ -98,5 +101,54 @@ describe('クリアの記録', () => {
     const snapshot = structuredClone(before);
     markCleared(before, 'branch', '2026-05-02');
     expect(before).toEqual(snapshot);
+  });
+});
+
+describe('シナリオの記録', () => {
+  it('終えると、星と手数が残る', () => {
+    const p = markScenarioCleared(emptyProgress(), 'hotfix', 3, 10, '2026-05-01');
+    expect(p.scenarios.hotfix).toEqual({ day: '2026-05-01', stars: 3, moves: 10 });
+    expect(scenarioClearedCount(p)).toBe(1);
+  });
+
+  it('2 度目に手数が増えても、星は下げない', () => {
+    // 一度出した記録が、遊び直したせいで消えるのは理不尽なので
+    let p = markScenarioCleared(emptyProgress(), 'hotfix', 3, 10, '2026-05-01');
+    p = markScenarioCleared(p, 'hotfix', 1, 30, '2026-05-02');
+    expect(p.scenarios.hotfix.stars).toBe(3);
+    expect(p.scenarios.hotfix.moves).toBe(10);
+  });
+
+  it('2 度目に良くなったら、そちらを残す', () => {
+    let p = markScenarioCleared(emptyProgress(), 'hotfix', 1, 30, '2026-05-01');
+    p = markScenarioCleared(p, 'hotfix', 3, 10, '2026-05-02');
+    expect(p.scenarios.hotfix.stars).toBe(3);
+    expect(p.scenarios.hotfix.moves).toBe(10);
+  });
+
+  it('初めて終えた日は上書きしない', () => {
+    let p = markScenarioCleared(emptyProgress(), 'hotfix', 1, 30, '2026-05-01');
+    p = markScenarioCleared(p, 'hotfix', 3, 10, '2026-05-09');
+    expect(p.scenarios.hotfix.day).toBe('2026-05-01');
+  });
+
+  it('連続日数も一緒に動く', () => {
+    let p = markScenarioCleared(emptyProgress(), 'hotfix', 3, 10, '2026-05-01');
+    p = markScenarioCleared(p, 'review', 3, 5, '2026-05-02');
+    expect(p.streak).toBe(2);
+  });
+
+  it('元の記録を書き換えない', () => {
+    const before = markScenarioCleared(emptyProgress(), 'hotfix', 3, 10, '2026-05-01');
+    const snapshot = structuredClone(before);
+    markScenarioCleared(before, 'review', 3, 5, '2026-05-02');
+    expect(before).toEqual(snapshot);
+  });
+
+  it('古い記録（scenarios が無い）を読んでも壊れない', () => {
+    // 途中から足した項目なので、既存の利用者の localStorage には入っていない
+    const old = { cleared: { areas: '2026-01-01' }, streak: 1, lastStudied: '2026-01-01' };
+    const p: Progress = { ...emptyProgress(), ...old };
+    expect(() => markScenarioCleared(p, 'hotfix', 3, 10, '2026-05-01')).not.toThrow();
   });
 });

@@ -3,6 +3,7 @@ import {
   emptyProgress,
   loadProgress,
   markCleared,
+  markScenarioCleared,
   saveProgress,
   today,
   type Progress,
@@ -14,6 +15,8 @@ interface ProgressStore {
   loaded: boolean;
   load: () => void;
   clear: (levelId: string) => void;
+  /** シナリオを 1 本終えたときの記録。星と手数も残す。 */
+  clearScenario: (id: string, stars: number, moves: number) => void;
   reset: () => void;
 }
 
@@ -35,6 +38,12 @@ export const useProgressStore = create<ProgressStore>((set, get) => ({
 
   clear: (levelId) => {
     const next = markCleared(get().progress, levelId, today());
+    saveProgress(next);
+    set({ progress: next });
+  },
+
+  clearScenario: (id, stars, moves) => {
+    const next = markScenarioCleared(get().progress, id, stars, moves, today());
     saveProgress(next);
     set({ progress: next });
   },

@@ -31,6 +31,13 @@ interface RepoStore {
    */
   pulse: number;
   output: OutputLine[];
+  /**
+   * 打ったコマンドの数。シナリオの星を決めるのに使う。
+   *
+   * undo では減らさない。打ち直しで手数をごまかせてしまうと、
+   * 最短手を探す遊びが成り立たなくなる。
+   */
+  moves: number;
 
   runLine: (line: string) => CommandResult;
   /** 与えられた状態から始め直す。レベルの開始状態を流し込むのに使う。 */
@@ -59,6 +66,7 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
   lastResult: null,
   pulse: 0,
   output: [],
+  moves: 0,
 
   runLine: (line) => {
     const history = get().history;
@@ -76,6 +84,8 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
       lastResult: result,
       pulse: result.touched.length > 0 ? s.pulse + 1 : s.pulse,
       output: [...s.output, ...lines],
+      // 失敗したコマンドは数えない。綴りの打ち間違いで星が下がるのは理不尽なので
+      moves: result.error ? s.moves : s.moves + 1,
     }));
 
     return result;
@@ -89,6 +99,7 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
       lastResult: null,
       pulse: 0,
       output: [{ id: nextLineId(), kind: 'note', text: note }],
+      moves: 0,
     });
   },
 
@@ -122,6 +133,7 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
       output: [
         { id: nextLineId(), kind: 'note', text: '最初から始めます。git init を実行してください。' },
       ],
+      moves: 0,
     });
   },
 
