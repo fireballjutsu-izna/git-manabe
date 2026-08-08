@@ -64,9 +64,17 @@ export type Head = { type: 'branch'; ref: string } | { type: 'detached'; oid: st
  *   untracked  … 一度もコミットされていない新しいファイル
  *   modified   … コミット済みだが、そのあと変更された
  *   staged     … 次のコミットに含めると決めた（index にある）
- *   conflicted … マージの両側が同じパスを変えていて、決着がついていない
+ *   conflicted … マージの両側が同じ行を変えていて、決着がついていない
+ *   ignored    … .gitignore に当たる。Git はこのファイルを見ていない
+ *   deleted    … 追跡をやめると決めた。次のコミットで tree から消える
  */
-export type FileStatus = 'untracked' | 'modified' | 'staged' | 'conflicted';
+export type FileStatus =
+  | 'untracked'
+  | 'modified'
+  | 'staged'
+  | 'conflicted'
+  | 'ignored'
+  | 'deleted';
 
 export interface FileState {
   path: string;

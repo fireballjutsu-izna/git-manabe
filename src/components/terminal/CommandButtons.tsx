@@ -5,7 +5,9 @@ import { useState } from 'react';
 import {
   currentBranchName,
   headCommitId,
+  ignorePatterns,
   isAncestor,
+  matchesIgnore,
   pausingWays,
   reachableCommits,
   type RepoState,
@@ -316,6 +318,52 @@ export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?
           weight: 0,
         });
       }
+    }
+
+    /*
+     * 無視されているファイルがあるなら、その扱い方を出す。
+     * .gitignore は「書いたのに効かない」で詰まる場所なので、
+     * 追跡から外すボタンをその場に置いておく。
+     */
+    /*
+     * .gitignore に書いてあるのに、まだ追跡しているファイル。
+     *
+     * isIgnored はステージに載っているものを false にする（それが本物の規則）ので、
+     * ここは「パターンに当たるか」だけを直に見る ― まさにこの食い違いが、
+     * 「書いたのに効かない」の正体なので、ボタンで出口を出しておく。
+     */
+    const patterns = ignorePatterns(state);
+    const trackedSecret = Object.keys(state.stage)
+      .sort()
+      .find((path) => matchesIgnore(path, patterns));
+    for (const f of state.workingDir) {
+      if (f.status !== 'ignored') continue;
+      more({
+        label: `git add -f ${f.path}`,
+        line: `git add -f ${f.path}`,
+        hint: '無視を押し切って入れる',
+      });
+    }
+    if (trackedSecret) {
+      now({
+        label: `git rm --cached ${trackedSecret}`,
+        line: `git rm --cached ${trackedSecret}`,
+        hint: '追跡から外す',
+        weight: 0,
+      });
+    }
+    if (!used(state, '.gitignore')) {
+      more({
+        label: 'touch .gitignore',
+        line: 'touch .gitignore',
+        hint: '見せないものを決める',
+      });
+    } else if (state.work['.gitignore']) {
+      more({
+        label: 'append .gitignore <パターン>',
+        line: 'append .gitignore .env',
+        hint: '無視するものを 1 行足す',
+      });
     }
 
     now({ label: 'git status', line: 'git status', weight: 4 });

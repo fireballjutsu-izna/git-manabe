@@ -26,6 +26,40 @@ export const LEVELS: Level[] = [
     ],
   },
   {
+    id: 'ignore',
+    title: '.gitignore ― 出してしまったものを引っ込める',
+    intro:
+      '.gitignore は「まだ追跡していないファイル」にしか効きません。すでにコミットしてしまったものは、書いただけでは止まらず、追跡から外すところまでやって初めて無視されます。',
+    task:
+      'すでにコミットしてしまった .env を追跡から外し、これから無視されるようにして、そこまでをコミットしてください。ファイルは手元に残したままです。',
+    setup: [
+      'git init',
+      'touch app.txt',
+      'touch .env  API_KEY=ひみつ',
+      'git add .',
+      'git commit -m 開店',
+    ],
+    check: (s) => {
+      const head = headCommitId(s);
+      if (!head) return false;
+      const tree = s.commits[head].tree;
+      // 最新のコミットから .env が消えていて、.gitignore が入っていること
+      if (tree['.env'] !== undefined) return false;
+      if (tree['.gitignore'] === undefined) return false;
+      if (!tree['.gitignore'].some((line) => line.trim() === '.env')) return false;
+      // 手元のファイルは消さない。消したら「引っ込める」ではなく「捨てる」
+      return s.work['.env'] !== undefined && s.index.length === 0;
+    },
+    suggest: { file: '.gitignore' },
+    hints: [
+      '.gitignore に書くだけでは止まりません。すでに追跡しているファイルには効かないからです。',
+      'touch .gitignore で作り、append .gitignore .env で 1 行足せます。',
+      'git rm --cached .env で追跡から外します。--cached を付けると、手元のファイルは残ります。',
+      'あとは git add .gitignore と git commit です。',
+      '終わったら git diff HEAD~1 HEAD を見てください。1 つ前のコミットには、まだ .env が入っています。',
+    ],
+  },
+  {
     id: 'branch',
     title: '枝と HEAD',
     intro:

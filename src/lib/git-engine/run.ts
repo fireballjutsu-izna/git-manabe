@@ -5,13 +5,14 @@ import {
   parseLine,
   type ParsedCommand,
 } from './parse';
+import { refreshIgnored } from './ignore';
 import { fail, requireNoPause } from './state';
 import { add } from './commands/add';
 import { branch } from './commands/branch';
 import { checkout, switchCommand } from './commands/checkout';
 import { commit } from './commands/commit';
 import { diff } from './commands/diff';
-import { edit, touch } from './commands/files';
+import { append, edit, touch } from './commands/files';
 import { init } from './commands/init';
 import { log } from './commands/log';
 import { merge } from './commands/merge';
@@ -21,6 +22,7 @@ import { reflog } from './commands/reflog';
 import { remote, teammate } from './commands/remote';
 import { fetch, pull, push } from './commands/sync';
 import { reset } from './commands/reset';
+import { rm } from './commands/rm';
 import { stash } from './commands/stash';
 import { status } from './commands/status';
 import { tag } from './commands/tag';
@@ -50,11 +52,13 @@ const GIT_HANDLERS: Record<string, Handler> = {
   status,
   log,
   diff,
+  rm,
 };
 
 const HELPER_HANDLERS: Record<string, Handler> = {
   touch,
   edit,
+  append,
   teammate,
 };
 
@@ -93,7 +97,6 @@ const ALLOWED_WHILE_PAUSED = new Set([
  */
 const RELATED: Record<string, string[]> = {
   restore: ['git checkout', 'git reset --hard', 'git stash'],
-  rm: ['git reset', 'git checkout'],
   mv: ['touch', 'git add'],
   clone: ['git init', 'git remote add', 'git fetch'],
 };
@@ -138,6 +141,12 @@ function distance(a: string, b: string): number {
  * ― 学習サイトなので、間違えたときに何が起きるかまでが教材になる。
  */
 export function run(state: RepoState, line: string): CommandResult {
+  // .gitignore を書いた瞬間に効き始めてほしいので、出口で一括して付け直す
+  const result = dispatch(state, line);
+  return result.error ? result : { ...result, state: refreshIgnored(result.state) };
+}
+
+function dispatch(state: RepoState, line: string): CommandResult {
   const parsed = parseLine(line);
 
   if (!parsed.ok) {

@@ -34,6 +34,12 @@ const SOLUTIONS: Record<string, string[][]> = {
     ['git add vase.txt'],
     ['git commit'],
   ],
+  secret: [
+    ['git rm --cached .env'],
+    ['touch .gitignore', 'append .gitignore .env'],
+    ['git add .gitignore', 'git commit -m ".env を追跡から外した"'],
+    ['git push origin main'],
+  ],
   showcase: [
     // cherry-pick の id は状態から引くので、ここでは印だけ置く
     ['<cherry-pick:傷んだ葉を直した>'],

@@ -25,6 +25,13 @@ const SOLUTIONS: Record<string, string[]> = {
   rebase: ['git rebase main'],
   reflog: ['git switch -c 救出 HEAD@{1}'],
   remote: ['git pull origin main'],
+  ignore: [
+    'touch .gitignore',
+    'append .gitignore .env',
+    'git rm --cached .env',
+    'git add .gitignore',
+    'git commit -m ".env を追跡から外した"',
+  ],
   conflict: ['git merge feature', 'git checkout --ours app.ts', 'git add app.ts', 'git commit'],
 };
 

@@ -1,6 +1,7 @@
 import { hasConflictMarkers } from '../content';
+import { isIgnored } from '../ignore';
 import { fail, ok, pausingWays, requireRepo } from '../state';
-import type { ParsedCommand } from '../parse';
+import { hasFlag, type ParsedCommand } from '../parse';
 import type { CommandResult, RepoState, Tree } from '../types';
 
 /**
@@ -21,12 +22,45 @@ export function add(state: RepoState, command: ParsedCommand): CommandResult {
     );
   }
 
+  const force = hasFlag(command, '-f', '--force');
   const all = specs.includes('.') || specs.includes('-A') || specs.includes('*');
-  const targets = all
-    ? state.workingDir
-    : state.workingDir.filter((f) => specs.includes(f.path));
+
+  /*
+   * .gitignore に当たるものは、まとめての add では飛ばす。
+   * これが .gitignore を書く目的そのもの ―「うっかり入れてしまう」を止める。
+   *
+   * 名指しで add したときだけは断って、-f が要ると言う。
+   * 本物と同じで、意図してなら入れられる（ただし、たいていは間違い）。
+   */
+  const skipped = all && !force ? state.workingDir.filter((f) => f.status === 'ignored') : [];
+  const blockedByIgnore =
+    !all && !force
+      ? state.workingDir.filter((f) => specs.includes(f.path) && f.status === 'ignored')
+      : [];
+
+  if (blockedByIgnore.length > 0) {
+    const names = blockedByIgnore.map((f) => f.path).join(', ');
+    return fail(
+      state,
+      `${names} は .gitignore で無視されています。`,
+      `どうしても入れるなら git add -f ${blockedByIgnore[0].path} ですが、たいていは間違いです。`,
+    );
+  }
+
+  const targets = (all ? state.workingDir : state.workingDir.filter((f) => specs.includes(f.path)))
+    .filter((f) => !skipped.includes(f));
 
   if (targets.length === 0) {
+    if (skipped.length > 0) {
+      return ok(
+        state,
+        [
+          'ステージに移すものがありません。',
+          `${skipped.map((f) => f.path).join(', ')} は .gitignore で無視されています。`,
+        ],
+        [],
+      );
+    }
     if (all) {
       return ok(state, ['ステージに移すものがありません。'], []);
     }
@@ -104,6 +138,12 @@ export function add(state: RepoState, command: ParsedCommand): CommandResult {
     next,
     [
       `${targets.length} 件をステージに移しました: ${targets.map((f) => f.path).join(', ')}`,
+      ...(skipped.length > 0
+        ? [`${skipped.map((f) => f.path).join(', ')} は .gitignore で無視したので、入れていません。`]
+        : []),
+      ...(force && targets.some((f) => isIgnored(state, f.path))
+        ? ['-f を付けたので、無視の指定を押し切って入れました。']
+        : []),
       ...(notes.length > 0
         ? notes
         : ['まだコミットはされていません。ステージは「次のコミットの下書き」です。']),

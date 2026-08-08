@@ -350,7 +350,7 @@ async function main(): Promise<void> {
     // ---- レベル ----
     // 一覧 → 1 つ解く → クリア記録が残り、一覧に反映される、まで通す
     await page.goto(`${BASE}/levels/`, { waitUntil: 'networkidle' });
-    check('レベルが 13 個並ぶ', await page.locator('[data-level]').count(), 13);
+    check('レベルが 14 個並ぶ', await page.locator('[data-level]').count(), 14);
     check(
       '最初はどれもクリアしていない',
       await page.locator('[data-level][data-cleared]').count(),
@@ -608,7 +608,7 @@ async function main(): Promise<void> {
     // ---- 記事 ----
     // 記事とレベルは同じ id で結ばれている。行き来できることを通しで見る
     await page.goto(`${BASE}/docs/`, { waitUntil: 'networkidle' });
-    check('記事が 13 本並ぶ', await page.locator('[data-doc]').count(), 13);
+    check('記事が 14 本並ぶ', await page.locator('[data-doc]').count(), 14);
 
     await page.goto(`${BASE}/docs/conflict/`, { waitUntil: 'networkidle' });
     check('記事の見出しが出る', await page.locator('h1').count(), 1);
@@ -628,7 +628,7 @@ async function main(): Promise<void> {
 
     // ---- シナリオ ----
     await page.goto(`${BASE}/scenarios/`, { waitUntil: 'networkidle' });
-    check('シナリオが 6 本並ぶ', await page.locator('[data-scenario]').count(), 6);
+    check('シナリオが 7 本並ぶ', await page.locator('[data-scenario]').count(), 7);
     check(
       '最初はどれも片付いていない',
       await page.locator('[data-scenario][data-done]').count(),
@@ -691,6 +691,52 @@ async function main(): Promise<void> {
     await send('git commit');
     check(
       'コンフリクトの回も最後まで解ける',
+      await countEventually(page, '[data-testid="finished"]', 1),
+      1,
+    );
+
+    // ---- .gitignore と、出してしまった秘密 ----
+    // 「書いたのに効かない」と「外しても履歴には残る」の 2 つを、画面で確かめる
+    await page.goto(`${BASE}/scenarios/secret/`, { waitUntil: 'networkidle' });
+    const secretInput = page.locator('#command-input');
+    await secretInput.waitFor({ timeout: 15_000 });
+    const sendSecret = async (line: string) => {
+      await secretInput.fill(line);
+      await secretInput.press('Enter');
+      await page.waitForTimeout(260);
+    };
+
+    await sendSecret('git rm --cached .env');
+    check(
+      '外すと「履歴には残る」と言う',
+      await countEventually(page, '.xterm-screen >> text=過去のコミットには', 1),
+      1,
+    );
+
+    await sendSecret('touch .gitignore');
+    await sendSecret('append .gitignore .env');
+    check(
+      '無視されたファイルは作業ディレクトリで薄くなる',
+      await page.locator('[data-pane="workingDir"]').getByText('ignored').count(),
+      1,
+    );
+
+    await sendSecret('git add .');
+    check(
+      'git add . では入らない',
+      await countEventually(page, '.xterm-screen >> text=.gitignore で無視したので', 1),
+      1,
+    );
+    check(
+      'ステージに載っているのは「外す」ほう',
+      await page.locator('[data-pane="index"]').getByText('追跡をやめる').count(),
+      1,
+    );
+
+    await sendSecret('git commit -m ".env を追跡から外した"');
+    await sendSecret('git push origin main');
+    check(
+      '秘密の回も最後まで解ける',
       await countEventually(page, '[data-testid="finished"]', 1),
       1,
     );

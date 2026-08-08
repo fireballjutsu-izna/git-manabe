@@ -21,6 +21,12 @@ export const DOCS: Doc[] = [
     summary: 'add と commit が何を運んでいるのか。Git が値を持つ場所は 3 つしかない',
   },
   {
+    id: 'ignore',
+    title: '.gitignore ― 出してしまった秘密',
+    summary:
+      '.gitignore は「まだ追跡していないもの」にしか効かない。コミット済みのものは git rm --cached まで止まらず、外しても履歴には残る',
+  },
+  {
     id: 'branch',
     title: '枝と HEAD',
     summary: 'ブランチは「コミットに付けた名前」でしかない。動く仕組みは付箋 2 枚で説明できる',
