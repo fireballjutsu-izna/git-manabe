@@ -57,14 +57,18 @@ export function Sandbox() {
         <div className="grid min-w-0 gap-4">
           <CommitGraph state={state} />
 
-          <div>
+          <div className="min-w-0">
             <h2 className="mb-2 text-xs font-bold tracking-wide text-accent">
               打てるコマンド（押すとそのまま実行されます）
             </h2>
             <CommandButtons />
           </div>
 
-          <div>
+          {/*
+            min-w-0 が無いと、グリッドの子は min-width:auto のまま ―
+            xterm の最小幅にひきずられて、狭い画面で本文ごと横にはみ出す。
+          */}
+          <div className="min-w-0">
             <h2 className="mb-2 text-xs font-bold tracking-wide text-accent">
               ターミナル（直接打つこともできます・↑↓ で履歴）
             </h2>

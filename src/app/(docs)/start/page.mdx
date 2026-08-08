@@ -1,7 +1,7 @@
 export const metadata = {
   title: 'はじめに',
   description:
-    'このサイトの Git が本物とどう違うか、最初に打つコマンドの並び、merge と reset の 3 モード、そして rebase・cherry-pick・revert・stash の違い。',
+    'このサイトの Git が本物とどう違うか、最初に打つコマンドの並び、merge とコンフリクト、reset の 3 モード、rebase・cherry-pick・revert・stash の違い、reflog とリモート。',
 };
 
 # はじめに
@@ -188,7 +188,7 @@ git stash list
 git stash pop           # 戻す
 ```
 
-このサイトで**唯一、グラフが一切変わらない**コマンドです。
+状態を書き換えるコマンドのうち、**グラフが一切変わらない唯一のもの**です。
 コミットを 1 つも作らず、動くのは 3 領域だけ。履歴には何の跡も残りません。
 
 退避中は 3 領域パネルの下に一覧が出ます。コミットではないので、グラフには現れません。
