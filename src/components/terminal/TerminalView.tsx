@@ -266,7 +266,7 @@ export default function TerminalView() {
   return (
     <div
       ref={hostRef}
-      className="h-72 w-full overflow-hidden rounded-card border border-line bg-sunken p-2"
+      className="h-48 w-full overflow-hidden rounded-card border border-line bg-sunken p-2 sm:h-72"
       aria-label="git コマンドを打つターミナル"
     />
   );

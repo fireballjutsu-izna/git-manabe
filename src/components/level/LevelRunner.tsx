@@ -167,7 +167,7 @@ function Runner({ level }: { level: NonNullable<ReturnType<typeof findLevel>> })
 
           <div className="min-w-0">
             <h2 className="mb-2 text-xs font-bold tracking-wide text-accent">打てるコマンド</h2>
-            <CommandButtons />
+            <CommandButtons suggest={level.suggest} />
           </div>
 
           {/*

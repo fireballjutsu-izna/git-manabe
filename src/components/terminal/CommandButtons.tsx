@@ -1,13 +1,39 @@
 'use client';
 
-import { useState } from 'react';
 import {
   currentBranchName,
   headCommitId,
   isAncestor,
   reachableCommits,
+  type RepoState,
 } from '@/lib/git-engine';
 import { useRepoStore } from '@/store/repo';
+
+/** そのパスが、もう作業ディレクトリかステージか履歴のどこかにあるか。 */
+function used(state: RepoState, path: string): boolean {
+  return (
+    state.tracked.includes(path) ||
+    state.workingDir.some((f) => f.path === path) ||
+    state.index.some((f) => f.path === path)
+  );
+}
+
+/** まだ使っていない file-N.txt。 */
+function nextFile(state: RepoState): string {
+  for (let n = 1; ; n += 1) {
+    const path = `file-${n}.txt`;
+    if (!used(state, path)) return path;
+  }
+}
+
+/** まだ使っていない feature-X。押すたびに次の名前へ進む。 */
+function nextBranch(state: RepoState): string {
+  for (let i = 0; i < 26; i += 1) {
+    const name = `feature-${String.fromCharCode(97 + i)}`;
+    if (!state.branches.some((b) => b.name === name)) return name;
+  }
+  return `feature-${state.branches.length}`;
+}
 
 /**
  * ボタンから同じコマンドを打てるようにする。
@@ -16,10 +42,9 @@ import { useRepoStore } from '@/store/repo';
  * 「次に何を打てばいいか分からない」で止まる人がいちばん多いため、
  * いまの状態から意味のある候補だけを出す。
  */
-export function CommandButtons() {
+export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?: string } }) {
   const state = useRepoStore((s) => s.history.present);
   const runLine = useRepoStore((s) => s.runLine);
-  const [nameSeq, setNameSeq] = useState(0);
 
   const head = headCommitId(state);
   const branch = currentBranchName(state);
@@ -51,7 +76,15 @@ export function CommandButtons() {
     suggestions.push({ label: 'git status', line: 'git status' });
     suggestions.push({ label: 'git log', line: 'git log' });
   } else {
-    const file = `file-${state.tracked.length + state.workingDir.length + 1}.txt`;
+    /*
+     * 課題が名前を指定しているなら、それを出す。
+     * 「hello.txt を作り」と書いてあるのにボタンが file-1.txt を出すと、
+     * 押しても課題が終わらない。
+     *
+     * 指定が無いときは、まだ使っていない file-N を選ぶ。
+     * 個数から採番すると、file-1 も file-2 も無いのに file-3 が出ることがある。
+     */
+    const file = suggest?.file && !used(state, suggest.file) ? suggest.file : nextFile(state);
     suggestions.push({ label: `touch ${file}`, line: `touch ${file}`, hint: '変更を 1 つ作る' });
 
     if (state.workingDir.length > 0) {
@@ -67,7 +100,9 @@ export function CommandButtons() {
     });
 
     if (head) {
-      const name = `feature-${String.fromCharCode(97 + (state.branches.length + nameSeq) % 26)}`;
+      const wanted = suggest?.branch;
+      const name =
+        wanted && !state.branches.some((b) => b.name === wanted) ? wanted : nextBranch(state);
       suggestions.push({
         label: `git branch ${name}`,
         line: `git branch ${name}`,
@@ -213,10 +248,7 @@ export function CommandButtons() {
         <button
           key={s.label}
           type="button"
-          onClick={() => {
-            runLine(s.line);
-            setNameSeq((n) => n + 1);
-          }}
+          onClick={() => runLine(s.line)}
           title={s.hint ? `${s.line} — ${s.hint}` : s.line}
           className="rounded border border-line bg-elev px-2.5 py-1.5 text-left font-mono text-xs text-fg hover:border-cyan-neon hover:bg-tint-cyan"
         >

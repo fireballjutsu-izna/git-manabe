@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { CommandInput } from './CommandInput';
 import { OutputAnnouncer } from './OutputAnnouncer';
 
 /**
@@ -11,7 +12,7 @@ import { OutputAnnouncer } from './OutputAnnouncer';
 const TerminalView = dynamic(() => import('./TerminalView'), {
   ssr: false,
   loading: () => (
-    <div className="flex h-72 w-full items-center justify-center rounded-card border border-line bg-sunken text-sm text-muted">
+    <div className="flex h-48 w-full items-center justify-center rounded-card border border-line bg-sunken text-sm text-muted sm:h-72">
       ターミナルを読み込んでいます…
     </div>
   ),
@@ -21,6 +22,7 @@ export function Terminal() {
   return (
     <>
       <TerminalView />
+      <CommandInput />
       <OutputAnnouncer />
     </>
   );

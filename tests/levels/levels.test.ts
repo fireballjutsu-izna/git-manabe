@@ -155,3 +155,34 @@ describe('記事とレベルの対応', () => {
     for (const doc of DOCS) expect(doc.summary.length, doc.id).toBeGreaterThan(10);
   });
 });
+
+describe('ボタンに出す名前', () => {
+  it('課題文に名前が書いてあるレベルは、その名前を suggest に持っている', () => {
+    // ボタンが file-1.txt を出すのに課題が hello.txt を求めていると、
+    // 押しても課題が終わらない
+    const FILE = /[A-Za-z0-9_-]+\.(?:txt|ts|md|js)/g;
+    for (const level of LEVELS) {
+      // setup が用意したファイルは、ユーザーが作るものではないので対象外
+      const prepared = new Set(level.setup.join(' ').match(FILE) ?? []);
+      const asked = (level.task.match(FILE) ?? []).filter((f) => !prepared.has(f));
+      if (asked.length === 0) continue;
+      expect(level.suggest?.file, `${level.id} の課題は ${asked[0]} を求めている`).toBe(asked[0]);
+    }
+  });
+
+  it('suggest の名前が、setup ですでに埋まっていない', () => {
+    // 埋まっていると、ボタンは自動生成の名前に落ちるので指定した意味が無い
+    for (const level of LEVELS) {
+      const state = setupState(level);
+      if (level.suggest?.file) {
+        expect(state.tracked.includes(level.suggest.file), level.id).toBe(false);
+      }
+      if (level.suggest?.branch) {
+        expect(
+          state.branches.some((b) => b.name === level.suggest!.branch),
+          level.id,
+        ).toBe(false);
+      }
+    }
+  });
+});
