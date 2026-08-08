@@ -1,6 +1,7 @@
+import { copyTree } from '../content';
 import { flagValue, type ParsedCommand } from '../parse';
-import { fail, headCommitId, ok, requireRepo } from '../state';
-import type { CommandResult, FileState, RepoState, StashEntry } from '../types';
+import { fail, headCommitId, ok, requireRepo, treeOf } from '../state';
+import type { CommandResult, FileState, RepoState, StashEntry, Tree } from '../types';
 
 /**
  * `git stash` / `push` / `pop` / `apply` / `list` / `drop`
@@ -54,10 +55,14 @@ function push(state: RepoState, command: ParsedCommand): CommandResult {
         : `WIP on ${base ?? '(コミットなし)'}`,
     index: state.index,
     workingDir: state.workingDir,
+    work: copyTree(state.work),
+    stage: copyTree(state.stage),
     base,
   };
 
   const total = state.index.length + state.workingDir.length;
+  // 退避したあとは「コミットそのままの状態」。中身も HEAD の tree に戻す
+  const clean = copyTree(treeOf(state, base));
 
   return ok(
     {
@@ -66,6 +71,8 @@ function push(state: RepoState, command: ParsedCommand): CommandResult {
       stash: [...state.stash, entry],
       index: [],
       workingDir: [],
+      work: clean,
+      stage: clean,
     },
     [
       `${total} 件を退避しました: ${entry.message}`,
@@ -86,6 +93,10 @@ function restore(state: RepoState, remove: boolean): CommandResult {
   // 同じパスが両方にあるときは、手元の状態をそのまま残す。
   const workingDir = mergeFiles(state.workingDir, entry.workingDir);
   const index = mergeFiles(state.index, entry.index);
+  // いま手元で変えているパスは、退避のぶんで上書きしない
+  const dirtyNow = new Set([...state.workingDir, ...state.index].map((f) => f.path));
+  const work = mergeTree(state.work, entry.work, entry.workingDir, dirtyNow);
+  const stage = mergeTree(state.stage, entry.stage, entry.index, dirtyNow);
 
   const lines = [
     `${entry.index.length + entry.workingDir.length} 件を戻しました: ${entry.message}`,
@@ -101,11 +112,33 @@ function restore(state: RepoState, remove: boolean): CommandResult {
       ...state,
       index,
       workingDir,
+      work,
+      stage,
       stash: remove ? state.stash.slice(0, -1) : state.stash,
     },
     lines,
     ['workingDir', 'index'],
   );
+}
+
+/**
+ * 退避していた中身を戻す。
+ *
+ * 退避したあとに変えたファイルは、手元のものをそのまま残す ―
+ * 上書きすると、pop したとたんに直近の作業が消えることになる。
+ */
+function mergeTree(
+  current: Tree,
+  restored: Tree,
+  entries: FileState[],
+  dirtyNow: Set<string>,
+): Tree {
+  const out = copyTree(current);
+  for (const f of entries) {
+    if (dirtyNow.has(f.path)) continue;
+    if (restored[f.path] !== undefined) out[f.path] = [...restored[f.path]];
+  }
+  return out;
 }
 
 function mergeFiles(current: FileState[], restored: FileState[]): FileState[] {

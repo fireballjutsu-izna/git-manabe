@@ -1,9 +1,16 @@
-import { fail, isTracked, ok, pathExists, requireRepo, setWorkingDir } from '../state';
+import { defaultContent, hasConflictMarkers } from '../content';
+import { fail, isTracked, ok, pathExists, requireRepo } from '../state';
 import type { ParsedCommand } from '../parse';
 import type { CommandResult, RepoState } from '../types';
 
+/** 位置引数の 2 つ目以降を、そのまま 1 行として読む。 */
+function restText(command: ParsedCommand): string | undefined {
+  const rest = command.positional.slice(1).join(' ').trim();
+  return rest || undefined;
+}
+
 /**
- * `touch <path>` — Git のコマンドではない。
+ * `touch <path> [中身]` — Git のコマンドではない。
  *
  * 作業ディレクトリに、まだ Git が知らないファイルを 1 つ作る。
  * 本物の Git を触るときはエディタでファイルを作る操作にあたる。
@@ -26,18 +33,32 @@ export function touch(state: RepoState, command: ParsedCommand): CommandResult {
     );
   }
 
+  const text = restText(command);
+  const content = text ? [text, '（ここに中身を書きます）'] : defaultContent(path);
+
   return ok(
-    setWorkingDir(state, [...state.workingDir, { path, status: 'untracked' }]),
-    [`${path} を作りました。`, 'Git はまだこのファイルを知りません（untracked）。'],
+    {
+      ...state,
+      work: { ...state.work, [path]: content },
+      workingDir: [...state.workingDir, { path, status: 'untracked' }],
+    },
+    [
+      `${path} を作りました。`,
+      `中身は ${content.length} 行です: ${content[0]}`,
+      'Git はまだこのファイルを知りません（untracked）。',
+    ],
     ['workingDir'],
   );
 }
 
 /**
- * `edit <path>` — Git のコマンドではない。
+ * `edit <path> [中身]` — Git のコマンドではない。
  *
- * コミット済みのファイルを変更したことにする。
- * untracked と modified の違いを手で作れるようにするために置いている。
+ * 1 行目を書き換える。中身を省くと、そのときどきで違う 1 行になる ―
+ * 別々の枝で同じファイルを edit すると、そこがそのままコンフリクトになる。
+ *
+ * 中身を書けば、自分で決着をつけることもできる。
+ * コンフリクトの目印（<<<<<<< など）を消すのは、この edit の仕事。
  */
 export function edit(state: RepoState, command: ParsedCommand): CommandResult {
   const blocked = requireRepo(state);
@@ -45,22 +66,58 @@ export function edit(state: RepoState, command: ParsedCommand): CommandResult {
 
   const path = command.positional[0];
   if (!path) {
-    return fail(state, 'ファイル名を書いてください。', '例: edit hello.txt');
+    return fail(state, 'ファイル名を書いてください。', '例: edit hello.txt 春の花');
   }
-  if (!isTracked(state, path)) {
+
+  const current = state.work[path];
+  if (!current && !isTracked(state, path)) {
     return fail(
       state,
       `${path} は、まだ一度もコミットされていません。`,
       `新しく作るなら touch ${path} を使ってください。`,
     );
   }
-  if (state.workingDir.some((f) => f.path === path)) {
-    return ok(state, [`${path} は、すでに変更済みです。`], []);
+
+  const before = current ?? state.stage[path] ?? [path];
+  const text = restText(command);
+
+  /*
+   * 中身の指定が無いときは、seq を混ぜた 1 行にする。
+   * 「変更した」という印だけだった頃と使い勝手は同じだが、
+   * 別々の枝で打つと必ず違う行になるので、コンフリクトが自然に起きる。
+   */
+  const line = text ?? `${path}（${state.seq + 1} 回目の変更）`;
+
+  // 目印を消すための edit なら、丸ごと 1 行に置き換える。
+  // 目印を残したまま 1 行目だけ書き換えても、決着したことにはならない
+  const resolving = hasConflictMarkers(before);
+  const after = resolving ? [line] : [line, ...before.slice(1)];
+
+  const already = state.workingDir.some((f) => f.path === path);
+  const status = isTracked(state, path) ? ('modified' as const) : ('untracked' as const);
+
+  const lines = [`${path} の 1 行目を「${line}」にしました。`];
+  if (resolving) {
+    lines.push('コンフリクトの目印は、この書き換えで消えました。');
+    lines.push(`決着をつけたことを Git に伝えるには git add ${path} です。`);
+  } else if (already) {
+    lines.push('すでに変更済みだったので、中身だけが変わりました。');
+  } else {
+    lines.push(
+      status === 'modified'
+        ? 'コミット済みのファイルへの変更なので modified です。'
+        : 'まだコミットされていないファイルなので untracked のままです。',
+    );
   }
 
   return ok(
-    setWorkingDir(state, [...state.workingDir, { path, status: 'modified' }]),
-    [`${path} を変更しました。`, 'コミット済みのファイルへの変更なので modified です。'],
+    {
+      ...state,
+      seq: text ? state.seq : state.seq + 1,
+      work: { ...state.work, [path]: after },
+      workingDir: already ? state.workingDir : [...state.workingDir, { path, status }],
+    },
+    lines,
     ['workingDir'],
   );
 }

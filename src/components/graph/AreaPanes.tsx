@@ -7,6 +7,7 @@ import {
   aheadBehind,
   currentBranchName,
   headCommitId,
+  pausingWays,
   type Area,
   type RepoState,
 } from '@/lib/git-engine';
@@ -55,10 +56,10 @@ export function AreaPanes({
   return (
     <div className="grid gap-3">
       {/*
-        マージが止まっているときは、いちばん上に出す。
+        止まっているときは、いちばん上に出す。
         3 領域より先に目に入らないと、「何が起きたのか分からないまま次を打つ」になる。
       */}
-      {state.merging && <MergePane state={state} />}
+      {state.pausing && <PausePane state={state} />}
 
       <Pane
         id="workingDir"
@@ -78,6 +79,7 @@ export function AreaPanes({
           label: f.path,
           badge: f.status === 'conflicted' ? '両方が変更' : f.status,
           alert: f.status === 'conflicted',
+          hint: firstLine(state.work[f.path]),
         }))}
       />
 
@@ -94,7 +96,12 @@ export function AreaPanes({
         tint="var(--tint-amber)"
         lit={lit.includes('index')}
         empty="空です"
-        items={state.index.map((f) => ({ key: f.path, label: f.path, badge: 'staged' }))}
+        items={state.index.map((f) => ({
+          key: f.path,
+          label: f.path,
+          badge: 'staged',
+          hint: firstLine(state.stage[f.path]),
+        }))}
       />
 
       <Arrow label="git commit" lit={lit.includes('repo')} />
@@ -243,55 +250,72 @@ function RemotePane({ state }: { state: RepoState }) {
 }
 
 /**
- * 途中で止まっているマージ。
+ * 途中で止まっている merge / rebase / cherry-pick。
  *
  * ここで伝えたいことは 1 つだけ ―「止まっているだけで、壊れていない」。
  * 出口が 2 つ（決着をつける／やめる）あることを、両方その場に書いておく。
+ * 続け方は 3 つで違うので、いま止まっているものに合わせて出す。
  */
-function MergePane({ state }: { state: RepoState }) {
-  const merging = state.merging;
-  if (!merging) return null;
+function PausePane({ state }: { state: RepoState }) {
+  const pausing = state.pausing;
+  if (!pausing) return null;
 
-  const done = merging.conflicts.length === 0;
+  const ways = pausingWays(pausing.kind);
+  const done = pausing.conflicts.length === 0;
+  // rebase は 1 件ずつ当て直すので、あと何回止まりうるかを出す
+  const left = Math.max(0, pausing.remaining.length - 1);
 
   return (
     <div
-      data-pane="merging"
+      data-pane="pausing"
+      data-pause-kind={pausing.kind}
       className="rounded-card border border-detached bg-tint-rose px-3 py-2 text-xs"
       aria-live="polite"
     >
       <div className="flex items-center justify-between gap-2">
-        <span className="font-bold text-detached">マージが途中で止まっています</span>
-        <code className="shrink-0 font-mono text-[11px] text-muted">{merging.from}</code>
+        <span className="font-bold text-detached">
+          {ways.label}が途中で止まっています
+        </span>
+        <code className="shrink-0 truncate font-mono text-[11px] text-muted">{pausing.from}</code>
       </div>
 
       {done ? (
         <p className="mt-1 leading-relaxed text-fg">
-          全部片付きました。<code className="font-mono">git commit</code> で完了できます。
+          全部片付きました。<code className="font-mono">{ways.next}</code> で先へ進めます。
         </p>
       ) : (
         <>
           <ul className="mt-1.5 space-y-0.5">
-            {merging.conflicts.map((path) => (
-              <li key={path} className="flex items-center justify-between gap-2">
-                <code className="truncate font-mono text-[11px] text-fg">{path}</code>
+            {pausing.conflicts.map((c) => (
+              <li key={c.path} className="flex items-center justify-between gap-2">
+                <code className="truncate font-mono text-[11px] text-fg">{c.path}</code>
                 <span className="shrink-0 rounded border border-detached px-1 text-[10px] text-detached">
-                  両方が変更
+                  同じ行を両方が変更
                 </span>
               </li>
             ))}
           </ul>
           <p className="mt-1.5 leading-relaxed text-muted">
-            どちらを残すかは Git には決められません。決着をつけたら
+            ファイルには <code className="font-mono text-fg">&lt;&lt;&lt;&lt;&lt;&lt;&lt;</code>{' '}
+            の目印が書き込まれています。
+            <code className="font-mono text-fg"> git checkout --ours </code>か
+            <code className="font-mono text-fg"> --theirs </code>で片側を選ぶか、
+            <code className="font-mono text-fg"> edit </code>で自分で書いてから
             <code className="font-mono text-fg"> git add </code>
-            で印を付けてください。
+            してください。
           </p>
         </>
       )}
 
+      {left > 0 && (
+        <p className="mt-1 leading-relaxed text-muted">
+          このあと、あと {left} 件を当て直します。途中でまた止まることがあります。
+        </p>
+      )}
+
       <p className="mt-1 leading-relaxed text-muted">
         コミットは 1 つも増えていません。
-        <code className="font-mono text-fg"> git merge --abort </code>
+        <code className="font-mono text-fg"> {ways.abort} </code>
         で、始める前の状態に戻せます。
       </p>
     </div>
@@ -304,6 +328,21 @@ interface Item {
   badge: string;
   /** 目を引かせたいもの（いまはコンフリクトだけ）。 */
   alert?: boolean;
+  /** ホバーで出す、中身の 1 行目。 */
+  hint?: string;
+}
+
+/**
+ * 中身の見出し 1 行。
+ *
+ * パネルは「どこに何があるか」を見せる場所なので、中身は常時は出さない。
+ * ただしホバーで読めると、ステージと作業ディレクトリで中身が違うことに気付ける
+ * ― add したあとに編集すると起きる、いちばん分かりにくい状態がこれ。
+ */
+function firstLine(content: string[] | undefined): string | undefined {
+  if (!content || content.length === 0) return undefined;
+  const head = content.find((line) => line.trim().length > 0) ?? content[0];
+  return content.length > 1 ? `${head}  （全 ${content.length} 行）` : head;
 }
 
 /**
@@ -366,7 +405,9 @@ function Pane({
               transition={{ duration: 0.2 }}
               className="flex items-center justify-between gap-2 overflow-hidden"
             >
-              <code className="truncate font-mono text-xs text-fg">{item.label}</code>
+              <code className="truncate font-mono text-xs text-fg" title={item.hint}>
+                {item.label}
+              </code>
               <span
                 className={[
                   'shrink-0 rounded border px-1 text-[10px]',

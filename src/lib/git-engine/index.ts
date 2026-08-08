@@ -9,14 +9,18 @@ export type {
   Area,
   Commit,
   CommandResult,
+  ConflictFile,
+  Content,
   FileState,
   FileStatus,
   Head,
+  Pausing,
   Ref,
   ReflogEntry,
   Remote,
   RepoState,
   StashEntry,
+  Tree,
 } from './types';
 
 export {
@@ -33,7 +37,11 @@ export {
   reachableCommits,
   aheadBehind,
   findRemote,
+  pausingWays,
+  treeOf,
+  headTree,
 } from './state';
+export { diffLines, formatFileDiff, hasConflictMarkers, sameContent } from './content';
 export { run } from './run';
 export { parseLine, GIT_COMMANDS, HELPER_COMMANDS, PLANNED_COMMANDS } from './parse';
 export {

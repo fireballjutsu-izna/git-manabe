@@ -5,11 +5,12 @@ import {
   parseLine,
   type ParsedCommand,
 } from './parse';
-import { fail, requireNoMerge } from './state';
+import { fail, requireNoPause } from './state';
 import { add } from './commands/add';
 import { branch } from './commands/branch';
 import { checkout, switchCommand } from './commands/checkout';
 import { commit } from './commands/commit';
+import { diff } from './commands/diff';
 import { edit, touch } from './commands/files';
 import { init } from './commands/init';
 import { log } from './commands/log';
@@ -48,6 +49,7 @@ const GIT_HANDLERS: Record<string, Handler> = {
   pull,
   status,
   log,
+  diff,
 };
 
 const HELPER_HANDLERS: Record<string, Handler> = {
@@ -57,21 +59,26 @@ const HELPER_HANDLERS: Record<string, Handler> = {
 };
 
 /**
- * マージが途中で止まっている間でも打てるコマンド。
+ * 途中で止まっている間でも打てるコマンド。
  *
  * 本物の Git も、コンフリクト中は多くの操作を断る ―
  * 決着がついていない状態の上に別の操作を重ねると、収拾がつかなくなるため。
  * ここを絞っておくと、「まず決着をつける／やめる」の 2 択に自然と誘導できる。
  *
- * 見るだけのコマンド（status / log / reflog / branch）と、
- * 決着に要るもの（add / commit / merge --abort / touch / edit）だけを通す。
+ * 見るだけのコマンド（status / log / diff / reflog / branch）と、
+ * 決着に要るもの（add / commit / --continue / --abort / touch / edit /
+ * checkout --ours・--theirs）だけを通す。
  */
-const ALLOWED_WHILE_MERGING = new Set([
+const ALLOWED_WHILE_PAUSED = new Set([
   'add',
   'commit',
   'merge',
+  'rebase',
+  'cherry-pick',
+  'checkout',
   'status',
   'log',
+  'diff',
   'reflog',
   'branch',
   'touch',
@@ -85,7 +92,6 @@ const ALLOWED_WHILE_MERGING = new Set([
  * 「そのコマンドで何をしたかったのか」に近いものを 3 つまで出す。
  */
 const RELATED: Record<string, string[]> = {
-  diff: ['git status', 'git log', 'git log --oneline'],
   restore: ['git checkout', 'git reset --hard', 'git stash'],
   rm: ['git reset', 'git checkout'],
   mv: ['touch', 'git add'],
@@ -141,8 +147,8 @@ export function run(state: RepoState, line: string): CommandResult {
 
   const command = parsed.command;
 
-  if (state.merging && !ALLOWED_WHILE_MERGING.has(command.name)) {
-    const blocked = requireNoMerge(state);
+  if (state.pausing && !ALLOWED_WHILE_PAUSED.has(command.name)) {
+    const blocked = requireNoPause(state);
     if (blocked) return blocked;
   }
 

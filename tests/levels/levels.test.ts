@@ -25,7 +25,7 @@ const SOLUTIONS: Record<string, string[]> = {
   rebase: ['git rebase main'],
   reflog: ['git switch -c 救出 HEAD@{1}'],
   remote: ['git pull origin main'],
-  conflict: ['git merge feature', 'git add app.ts', 'git commit'],
+  conflict: ['git merge feature', 'git checkout --ours app.ts', 'git add app.ts', 'git commit'],
 };
 
 describe('レベルの定義', () => {

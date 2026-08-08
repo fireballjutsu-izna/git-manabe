@@ -37,6 +37,23 @@ const COLOR: Record<OutputLine['kind'], string> = {
   note: '\x1b[32m', // green ＝ --neon-lime
 };
 
+/**
+ * git diff の行だけ、+ と - で色を分ける。
+ *
+ * 本物の git がそう出すからで、そこを揃えないと
+ * 「実物ではこう見える」を持ち帰ってもらえない。
+ * 目印（<<<<<<<）も、ぶつかった場所として目立たせる。
+ */
+function diffColor(text: string): string | null {
+  if (text.startsWith('+++') || text.startsWith('---')) return '\x1b[90m';
+  if (text.startsWith('+')) return '\x1b[32m'; // green
+  if (text.startsWith('-')) return '\x1b[31m'; // red
+  if (text.startsWith('<<<<<<<') || text.startsWith('>>>>>>>') || text === '=======') {
+    return '\x1b[36m'; // cyan
+  }
+  return null;
+}
+
 /** CSS 変数から xterm の配色を作る。テーマを切り替えたら読み直す。 */
 function readTheme(): Record<string, string> {
   const style = getComputedStyle(document.documentElement);
@@ -127,7 +144,7 @@ export default function TerminalView() {
       for (let i = written; i < output.length; i += 1) {
         const line = output[i];
         const body = line.kind === 'input' ? `${PROMPT}${line.text}` : `  ${line.text}`;
-        term.write(`\r\x1b[K${COLOR[line.kind]}${body}\x1b[0m\r\n`);
+        term.write(`\r\x1b[K${diffColor(line.text) ?? COLOR[line.kind]}${body}\x1b[0m\r\n`);
       }
       written = output.length;
     };

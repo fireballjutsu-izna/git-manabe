@@ -1,4 +1,4 @@
-import { currentBranchName, headCommitId, ok, refsAt, requireRepo } from '../state';
+import { currentBranchName, headCommitId, ok, pausingWays, refsAt, requireRepo } from '../state';
 import type { CommandResult, RepoState } from '../types';
 
 /**
@@ -25,23 +25,28 @@ export function status(state: RepoState): CommandResult {
   }
 
   /*
-   * マージの途中は、いちばん先に言う。
+   * 止まっている途中は、いちばん先に言う。
    *
    * 本物の Git もここを最初に出す ― 何が起きているか分からないまま
    * 次のコマンドを打つのが、コンフリクトでいちばん怖い瞬間なので。
    */
-  const merging = state.merging;
-  if (merging) {
+  const pausing = state.pausing;
+  if (pausing) {
+    const ways = pausingWays(pausing.kind);
     lines.push('');
-    lines.push(`${merging.from} の取り込みが途中で止まっています。`);
-    if (merging.conflicts.length > 0) {
-      lines.push('決着のついていないファイル:');
-      for (const p of merging.conflicts) lines.push(`  両方が変更: ${p}`);
-      lines.push('直したら git add してください。全部片付くと git commit できます。');
-    } else {
-      lines.push('ぶつかっていたファイルは全部片付いています。git commit でマージを完了できます。');
+    lines.push(`${pausing.from} の取り込みが途中で止まっています（${ways.label}）。`);
+    if (pausing.remaining.length > 1) {
+      lines.push(`このあと、あと ${pausing.remaining.length - 1} 件を当て直します。`);
     }
-    lines.push('やめるなら git merge --abort です。');
+    if (pausing.conflicts.length > 0) {
+      lines.push('決着のついていないファイル:');
+      for (const c of pausing.conflicts) lines.push(`  両方が変更: ${c.path}`);
+      lines.push(`直したら git add してください。全部片付くと ${ways.next} で進めます。`);
+      lines.push('片側をまるごと選ぶなら git checkout --ours <path> / --theirs <path> です。');
+    } else {
+      lines.push(`ぶつかっていたファイルは全部片付いています。${ways.next} で先へ進めます。`);
+    }
+    lines.push(`やめるなら ${ways.abort} です。`);
   }
 
   if (state.index.length > 0) {

@@ -1,3 +1,4 @@
+import { hasConflictMarkers } from '@/lib/git-engine';
 import {
   areasClean,
   contains,
@@ -273,7 +274,7 @@ export const SCENARIOS: Scenario[] = [
     title: '二人が同じ花器を触った',
     subtitle: 'コンフリクトは、止まるだけで壊れていない',
     intro:
-      'あなたが春の飾りに替えているあいだに、店長も同じ花器を生け直していました。Git はどちらを残すか決められないので、そこで手を止めます。',
+      'あなたが春の飾りに替えているあいだに、店長も同じ花器を生け直していました。同じ 1 行を二人が書き換えているので、Git はどちらを残すか決められません。そこで手を止め、ファイルには両方の案を並べて書き込みます。',
     setup: [
       'git init',
       'touch vase.txt',
@@ -281,11 +282,11 @@ export const SCENARIOS: Scenario[] = [
       'git add .',
       'git commit -m 開店',
       'git switch -c spring',
-      'edit vase.txt',
+      'edit vase.txt 春の花',
       'git add .',
       'git commit -m 春の花に替えた',
       'git switch main',
-      'edit vase.txt',
+      'edit vase.txt 店長が生けた枝もの',
       'git add .',
       'git commit -m 店長が生け直した',
     ],
@@ -295,7 +296,7 @@ export const SCENARIOS: Scenario[] = [
         from: '店長',
         message: '春の飾り、いいね。店頭に入れちゃって。',
         task: 'main で spring を取り込んでください。おそらく、そのままでは終わりません。',
-        check: (s) => s.merging !== null,
+        check: (s) => s.pausing !== null,
         hints: [
           'git merge spring です。',
           '止まっても壊れていません。コミットは 1 つも増えていないはずです。',
@@ -305,13 +306,27 @@ export const SCENARIOS: Scenario[] = [
       {
         from: '店長',
         message:
-          'ああ、同じ花器を二人で触ってたか。どちらを残すかは、あなたが決めて。決まったら Git に伝えて。',
+          'ああ、同じ花器を二人で触ってたか。ファイルを開くと、両方の案が <<<<<<< で区切って並んでるはず。どっちを残すか決めて、その目印は消しといて。',
+        task: 'vase.txt から目印を消して、残す中身を 1 つに決めてください。',
+        check: (s) => s.pausing !== null && !hasConflictMarkers(s.work['vase.txt']),
+        hints: [
+          'git diff を打つと、いま書き込まれている中身がそのまま読めます。',
+          '片側をまるごと残すなら git checkout --ours vase.txt（店長の案）か --theirs vase.txt（春の花）です。',
+          '自分で書くなら edit vase.txt <残したい中身> でも構いません。',
+          'やめたくなったら git merge --abort で、始める前に戻せます。',
+        ],
+        par: 1,
+        suggest: { file: 'vase.txt' },
+      },
+      {
+        from: '店長',
+        message: '決まった？ じゃあ、決めたってことを Git に伝えて。',
         task: 'ぶつかった vase.txt に、決着をつけた印を付けてください。',
-        check: (s) => s.merging !== null && s.merging.conflicts.length === 0,
+        check: (s) => s.pausing !== null && s.pausing.conflicts.length === 0,
         hints: [
           '決着に専用のコマンドはありません。いつものコマンドが、その印を兼ねます。',
           'git add vase.txt です。',
-          'やめたくなったら git merge --abort で、始める前に戻せます。',
+          '目印が残ったままだと断られます。先に消してください。',
         ],
         par: 1,
         suggest: { file: 'vase.txt' },
@@ -320,7 +335,7 @@ export const SCENARIOS: Scenario[] = [
         from: '店長',
         message: 'じゃあそれで確定して。',
         task: 'マージを完了させてください。',
-        check: (s) => s.merging === null && headParents(s) === 2 && on(s, 'main'),
+        check: (s) => s.pausing === null && headParents(s) === 2 && on(s, 'main'),
         hints: [
           'git commit です。メッセージは省いても構いません。',
           '親を 2 つ持つコミットができて、止まっていた状態が解けます。',
@@ -335,7 +350,7 @@ export const SCENARIOS: Scenario[] = [
     title: '展示会の支度',
     subtitle: '必要な修正だけを持っていく',
     intro:
-      '工房では試作がいくつも進んでいますが、展示会に出せるのは仕上がったものだけ。枝ごとではなく、必要な 1 つだけを摘んできます。そして、摘んだものを後から枝ごと取り込むと何が起きるのかも、ここで見ます。',
+      '工房では試作がいくつも進んでいますが、展示会に出せるのは仕上がったものだけ。枝ごとではなく、必要な 1 つだけを摘んできます。そして、摘んだものを後から枝ごと取り込むと何が残るのかも、ここで見ます。',
     setup: [
       'git init',
       'git commit -m 開店',
@@ -375,33 +390,25 @@ export const SCENARIOS: Scenario[] = [
       {
         from: '店長',
         message: '展示会おつかれさま。試作のほうも、もう全部入れちゃっていいよ。',
-        task: 'workshop を main に取り込んでください。すんなりとはいかないかもしれません。',
-        check: (s) => s.merging !== null,
+        task: 'workshop を main に取り込んでください。',
+        check: (s) => s.pausing === null && headParents(s) === 2 && contains(s, 'main', 'workshop'),
         hints: [
           'git merge workshop です。',
-          'ぶつかっても慌てないでください。コミットは 1 つも増えていません。',
+          '摘んできたぶんと重なりますが、中身が同じなのでぶつかりません。',
         ],
         par: 1,
       },
       {
         from: '先輩',
         message:
-          'ああ、それ摘んできたやつと重なってるんだ。cherry-pick は中身をコピーするから、あとから枝ごと取り込むと同じところを二度触ることになる。よくあるやつだよ。決着つけちゃって。',
-        task: 'ぶつかった leaf.txt に印を付けて、マージを完了させてください。',
-        check: (s) => s.merging === null && headParents(s) === 2 && contains(s, 'main', 'workshop'),
-        hints: [
-          'git add leaf.txt で、決着をつけた印を付けます。',
-          'そのあと git commit でマージが完了します。',
-        ],
-        par: 2,
-        suggest: { file: 'leaf.txt' },
-      },
-      {
-        from: '店長',
-        message: 'ありがとう。最後に本店へ送っておいて。',
-        task: '本店へ送ってください。',
+          'すんなり入ったでしょ。cherry-pick は中身をコピーするだけだから、あとから枝ごと取り込んでも、同じ中身なら Git は黙って 1 つにする。ぶつかるのは「同じ行を違う中身にしたとき」だけ。ただ、グラフを見て。「傷んだ葉を直した」が 2 つ並んでるはず ― 摘んだ複製と、元のやつ。中身は同じでも別のコミットだから、両方残る。',
+        task: 'グラフで、同じメッセージのコミットが 2 つあることを確かめてください。確かめたら、本店へ送ります。',
         check: (s) => remoteTip(s, 'main') === tipOf(s, 'main'),
-        hints: ['git push origin main です。'],
+        hints: [
+          '「傷んだ葉を直した」が 2 行あります。id が違うのが分かります。',
+          'git log --oneline でも並びが見られます。',
+          '確かめたら git push origin main です。',
+        ],
         par: 1,
       },
     ],

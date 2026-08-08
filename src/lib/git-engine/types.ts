@@ -6,6 +6,17 @@
  * そうしておくと、undo/redo もレベルの合格判定も、状態を配列に積むだけで済む。
  */
 
+/**
+ * ファイルの中身。教育用に、短い行の配列だけを扱う。
+ *
+ * 中身を持たない頃は「どのパスが変わったか」しか分からず、
+ * git diff が作れず、コンフリクトもファイル単位でしか起こせなかった。
+ */
+export type Content = string[];
+
+/** ある時点の全ファイル。本物の git の tree にあたる。 */
+export type Tree = Record<string, Content>;
+
 /** コミット 1 つ。parents が 2 つならマージコミット。 */
 export interface Commit {
   /** 7 桁の 16 進。本物の SHA-1 ではなく、見た目だけ似せた識別子。 */
@@ -16,8 +27,13 @@ export interface Commit {
   author: string;
   /** state.seq 由来の単調増加値。Date.now() は使わない（再現性のため）。 */
   createdAt: number;
+  /** そのコミット時点の全ファイル。 */
+  tree: Tree;
   /**
    * このコミットが記録したパス。
+   *
+   * **第一親の tree との差から導く**。addCommit が必ず計算するので、
+   * tree とずれることはない（2 つを別々に持つと、必ずどこかでずれる）。
    *
    * reset がこれを使う ― 取り消したコミットに入っていた変更を、
    * ステージへ戻すのか（--soft）、作業ディレクトリへ戻すのか（--mixed）、
@@ -69,29 +85,61 @@ export interface StashEntry {
   message: string;
   index: FileState[];
   workingDir: FileState[];
+  /** 退避したときのファイルの中身。 */
+  work: Tree;
+  stage: Tree;
   /** どのコミットの上で退避したか。 */
   base: string | null;
 }
 
+/** ぶつかったファイル 1 件。片側を選び直せるように、両側の中身を取っておく。 */
+export interface ConflictFile {
+  path: string;
+  /** こちら側（HEAD）の中身。 */
+  ours: Content;
+  /** 取り込もうとしている側の中身。 */
+  theirs: Content;
+}
+
 /**
- * 途中で止まっているマージ。
+ * 途中で止まっている作業。
  *
  * コンフリクトは「Git が勝手に決められなかった」というだけの状態で、
  * 壊れているわけではない。だからこそ**途中で止まる**という形にする ―
  * 決着をつける（add）か、なかったことにする（--abort）まで、ここに居続ける。
+ *
+ * 止まるのは merge だけではない。実務でいちばん痛いのは
+ * **rebase の途中で止まること**なので、3 つとも同じ形で扱う。
+ * 続け方だけが違う:
+ *
+ *   merge        続ける: git commit              やめる: git merge --abort
+ *   rebase       続ける: git rebase --continue   やめる: git rebase --abort
+ *   cherry-pick  続ける: git cherry-pick --continue  やめる: git cherry-pick --abort
  */
-export interface MergeInProgress {
-  /** ユーザーが打った取り込み相手の名前。 */
+export interface Pausing {
+  kind: 'merge' | 'rebase' | 'cherry-pick';
+  /** ユーザーが打った取り込み相手の名前。表示にだけ使う。 */
   from: string;
-  /** 相手の先端。マージコミットの 2 番目の親になる。 */
+  /** いま当てようとしているコミット。merge ではマージコミットの 2 番目の親になる。 */
   theirs: string;
-  /** 分かれた地点。 */
+  /** 分かれた地点（merge）／当てているコミットの親（rebase・cherry-pick）。 */
   base: string | null;
-  /** 両側が変えていて、決着がついていないパス。 */
-  conflicts: string[];
-  /** --abort で戻すための、マージ前の 3 領域。 */
-  savedIndex: FileState[];
-  savedWorkingDir: FileState[];
+  /** 両側が変えていて、決着がついていないファイル。 */
+  conflicts: ConflictFile[];
+  /** --abort で戻すための、止まる前の状態。 */
+  saved: {
+    index: FileState[];
+    workingDir: FileState[];
+    work: Tree;
+    stage: Tree;
+    head: Head;
+    /** 枝の上にいたなら、その枝が指していた先。 */
+    branchTarget: string | null;
+  };
+  /** rebase・cherry-pick で、まだ当てていないコミット（古い順）。 */
+  remaining: string[];
+  /** これまでに作り直したコミットの対応（元 → 複製）。 */
+  done: { before: string; after: string }[];
 }
 
 /**
@@ -151,8 +199,17 @@ export interface RepoState {
    * 自分では動かない。ここが古いままなのが、pull を忘れた状態。
    */
   remoteBranches: Ref[];
-  /** マージが途中で止まっているなら、その情報。 */
-  merging: MergeInProgress | null;
+  /**
+   * 作業ディレクトリのファイルの中身。path → 行。
+   *
+   * workingDir（FileState[]）が「どのファイルが、どういう状態か」を持つのに対し、
+   * こちらは中身そのもの。git diff とコンフリクトの目印は、こちらから作る。
+   */
+  work: Tree;
+  /** ステージの中身。コミットすると、これがそのまま tree になる。 */
+  stage: Tree;
+  /** merge・rebase・cherry-pick が途中で止まっているなら、その情報。 */
+  pausing: Pausing | null;
   reflog: ReflogEntry[];
   /** id の採番と createdAt の元になる単調カウンタ。Math.random() は使わない。 */
   seq: number;

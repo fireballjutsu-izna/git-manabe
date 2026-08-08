@@ -1,12 +1,12 @@
+import { applyOnto, pauseWith, restore, snapshot } from '../apply';
 import { hasFlag, type ParsedCommand } from '../parse';
 import {
   addCommit,
-  commitsBetween,
-  pathsIn,
   currentBranchName,
   fail,
   headCommitId,
   isAncestor,
+  loadTree,
   mergeBase,
   nextCommitId,
   ok,
@@ -16,6 +16,7 @@ import {
   resolveRevision,
   setBranch,
   setHead,
+  treeOf,
 } from '../state';
 import type { CommandResult, RepoState } from '../types';
 
@@ -35,7 +36,7 @@ export function merge(state: RepoState, command: ParsedCommand): CommandResult {
 
   // --abort だけは、マージの途中でも受ける（というより、そのためにある）
   if (hasFlag(command, '--abort')) return abort(state);
-  if (state.merging) {
+  if (state.pausing) {
     return fail(
       state,
       'マージの途中です。もう 1 つ始めることはできません。',
@@ -88,36 +89,26 @@ export function merge(state: RepoState, command: ParsedCommand): CommandResult {
  * 「詰んだら戻れる」ことを先に知っておくと、コンフリクトは怖くなくなる。
  */
 function abort(state: RepoState): CommandResult {
-  const merging = state.merging;
-  if (!merging) {
+  const pausing = state.pausing;
+  if (!pausing) {
     return fail(state, 'いまマージの途中ではありません。');
   }
+  if (pausing.kind !== 'merge') {
+    return fail(
+      state,
+      `いま止まっているのは ${pausing.kind} です。`,
+      `やめるなら git ${pausing.kind} --abort です。`,
+    );
+  }
   return ok(
-    {
-      ...state,
-      merging: null,
-      index: merging.savedIndex,
-      workingDir: merging.savedWorkingDir,
-    },
+    restore(state, pausing),
     [
-      `${merging.from} の取り込みをやめました。`,
+      `${pausing.from} の取り込みをやめました。`,
       'マージを始める前の状態に戻っています。コミットは 1 つも増えていません。',
+      'ファイルの中身も戻っているので、書き込まれた目印は残っていません。',
     ],
     ['workingDir', 'index'],
   );
-}
-
-/**
- * 両側が同じパスを変えていないかを見る。
- *
- * このサイトはファイルの中身を持たないので、行単位のぶつかりは作れない。
- * 代わりに「分かれてから、両側が同じパスを触ったか」で判定する。
- * 起きる理由（同じところを 2 人が変えた）は、これで十分に伝わる。
- */
-function conflictingPaths(state: RepoState, head: string, theirs: string, base: string | null): string[] {
-  const ours = new Set(pathsIn(state, commitsBetween(state, base, head)));
-  const yours = pathsIn(state, commitsBetween(state, base, theirs));
-  return yours.filter((p) => ours.has(p)).sort();
 }
 
 /**
@@ -130,6 +121,7 @@ function fastForward(state: RepoState, target: string, theirs: string): CommandR
   const branch = currentBranchName(state);
 
   let next = branch ? setBranch(state, branch, theirs) : setHead(state, { type: 'detached', oid: theirs });
+  next = loadTree(next, treeOf(next, theirs));
   next = { ...next, tracked: recomputeTracked(next, theirs) };
   next = recordReflog(next, 'merge', `${target} を fast-forward`, from, theirs);
 
@@ -139,42 +131,7 @@ function fastForward(state: RepoState, target: string, theirs: string): CommandR
       `fast-forward で ${target} に追いつきました（${theirs}）。`,
       'ひと筋道の上を進んだだけなので、マージコミットは作られていません。',
     ],
-    ['repo', 'head'],
-  );
-}
-
-/** コンフリクトで止まる。ここから add か --abort のどちらかへ進む。 */
-function pause(
-  state: RepoState,
-  from: string,
-  theirs: string,
-  base: string | null,
-  conflicts: string[],
-): CommandResult {
-  const conflicted = conflicts.map((path) => ({ path, status: 'conflicted' as const }));
-  const untouched = state.workingDir.filter((f) => !conflicts.includes(f.path));
-
-  return ok(
-    {
-      ...state,
-      workingDir: [...untouched, ...conflicted],
-      merging: {
-        from,
-        theirs,
-        base,
-        conflicts,
-        savedIndex: state.index,
-        savedWorkingDir: state.workingDir,
-      },
-    },
-    [
-      `${conflicts.length} 件がぶつかりました: ${conflicts.join(', ')}`,
-      '分かれたあと、両側が同じファイルを変えています。どちらを残すかは Git には決められません。',
-      'マージは途中で止まっています。壊れてはいません。',
-      '決着をつけたファイルを git add してから git commit すると、マージが完了します。',
-      'やめるなら git merge --abort です。始める前の状態に戻ります。',
-    ],
-    ['workingDir'],
+    ['repo', 'head', 'workingDir', 'index'],
   );
 }
 
@@ -199,10 +156,29 @@ function threeWay(
 
   const base = mergeBase(state, head, theirs);
 
-  // 両側が同じパスを変えていたら、Git には決められない。途中で止める
-  const conflicts = conflictingPaths(state, head, theirs, base);
-  if (conflicts.length > 0) {
-    return pause(state, target, theirs, base, conflicts);
+  /*
+   * 3 つの版（分岐点・こちら・あちら）を、ファイルの中身ごと 1 つにする。
+   *
+   * 両側が同じファイルを触っていても、**違う行**ならぶつからない ―
+   * パスだけで見ていた頃は、ここで必ず止まってしまっていた。
+   */
+  const applied = applyOnto(state, base, head, theirs, 'HEAD', target);
+
+  if (applied.conflicts.length > 0) {
+    return pauseWith(
+      state,
+      {
+        kind: 'merge',
+        from: target,
+        theirs,
+        base,
+        conflicts: applied.conflicts,
+        saved: snapshot(state),
+        remaining: [],
+        done: [],
+      },
+      applied.tree,
+    );
   }
 
   const id = nextCommitId(state);
@@ -213,13 +189,14 @@ function threeWay(
     parents: [head, theirs],
     message,
     author: 'あなた',
-    // マージそのものは新しい変更を持ち込まない。
-    // 中身は両側のコミットが既に記録している。
-    paths: [],
+    tree: applied.tree,
   });
   next = setBranch(next, branch, id);
+  next = loadTree(next, applied.tree);
   next = { ...next, tracked: recomputeTracked(next, id) };
   next = recordReflog(next, 'merge', message, head, id);
+
+  const merged = next.commits[id].paths;
 
   return ok(
     next,
@@ -228,8 +205,11 @@ function threeWay(
       base
         ? `分かれたのは ${base} で、そこから伸びた両側をここで 1 つに戻しました。`
         : '共通の祖先が無い履歴どうしを繋ぎました。',
+      merged.length > 0
+        ? `${merged.length} 件が向こうから入りました: ${merged.join(', ')}`
+        : 'こちらに取り込む中身の変化はありませんでした。',
       'このコミットだけが親を 2 つ持ちます。グラフで線が 2 本入ってくるのがそれです。',
     ],
-    ['repo', 'head'],
+    ['repo', 'head', 'workingDir', 'index'],
   );
 }

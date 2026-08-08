@@ -1,11 +1,14 @@
+import { defaultContent } from '../content';
 import { flagValue, type ParsedCommand } from '../parse';
 import {
   addCommit,
+  copyTree,
   currentBranchName,
   fail,
   headCommitId,
   nextCommitId,
   ok,
+  pausingWays,
   recomputeTracked,
   recordReflog,
   requireRepo,
@@ -29,6 +32,7 @@ function autoPath(state: RepoState): string {
  * `git commit -m <message>`
  *
  * ステージの中身を 1 つのコミットにして、HEAD を前へ進める。
+ * コミットの tree は、そのときのステージそのもの。
  *
  * HEAD が枝の上にいれば、その枝ごと進む（unborn なら、ここで枝が生まれる）。
  * detached HEAD なら HEAD だけが進み、どの枝も動かない ―
@@ -41,7 +45,15 @@ export function commit(state: RepoState, command: ParsedCommand): CommandResult 
   const message = flagValue(command, '-m', '--message');
 
   // マージの途中なら、commit の意味が変わる ― 続きではなく「決着の確定」になる
-  if (state.merging) {
+  if (state.pausing) {
+    if (state.pausing.kind !== 'merge') {
+      const kind = state.pausing.kind;
+      return fail(
+        state,
+        `${pausingWays(kind).label}の途中です。ここでの続きは git commit ではありません。`,
+        `git ${kind} --continue で続けるか、git ${kind} --abort でやめてください。`,
+      );
+    }
     return finishMerge(state, typeof message === 'string' ? message.trim() : '');
   }
 
@@ -56,7 +68,12 @@ export function commit(state: RepoState, command: ParsedCommand): CommandResult 
   let base = state;
   if (base.index.length === 0) {
     const path = autoPath(base);
-    base = { ...base, index: [{ path, status: 'staged' }] };
+    base = {
+      ...base,
+      index: [{ path, status: 'staged' }],
+      stage: { ...base.stage, [path]: defaultContent(path) },
+      work: { ...base.work, [path]: defaultContent(path) },
+    };
     notes.push(
       `ステージが空だったので、${path} という変更を 1 つ作ってコミットしました（このサイト独自の親切です）。`,
     );
@@ -71,7 +88,8 @@ export function commit(state: RepoState, command: ParsedCommand): CommandResult 
     parents: parent ? [parent] : [],
     message: message.trim(),
     author: 'あなた',
-    paths: committedPaths,
+    // ステージそのものが、このコミットの tree になる
+    tree: copyTree(base.stage),
   });
 
   // ステージの中身が、これでリポジトリ側のものになる
@@ -133,13 +151,13 @@ export function commit(state: RepoState, command: ParsedCommand): CommandResult 
  * コンフリクトの後始末に専用のコマンドが無いのは、これが「ただのコミット」だから。
  */
 function finishMerge(state: RepoState, message: string): CommandResult {
-  const merging = state.merging;
-  if (!merging) return fail(state, 'いまマージの途中ではありません。');
+  const pausing = state.pausing;
+  if (!pausing) return fail(state, 'いまマージの途中ではありません。');
 
-  if (merging.conflicts.length > 0) {
+  if (pausing.conflicts.length > 0) {
     return fail(
       state,
-      `まだ決着のついていないファイルがあります: ${merging.conflicts.join(', ')}`,
+      `まだ決着のついていないファイルがあります: ${pausing.conflicts.map((c) => c.path).join(', ')}`,
       '直したファイルを git add してください。やめるなら git merge --abort です。',
     );
   }
@@ -152,17 +170,17 @@ function finishMerge(state: RepoState, message: string): CommandResult {
 
   const id = nextCommitId(state);
   // 本物の Git はここでメッセージを用意してエディタを開く。同じ既定文を使う
-  const text = message || `Merge ${merging.from} into ${branch}`;
+  const text = message || `Merge ${pausing.from} into ${branch}`;
   const paths = state.index.map((f) => f.path);
 
   let next = addCommit(state, {
     id,
-    parents: [head, merging.theirs],
+    parents: [head, pausing.theirs],
     message: text,
     author: 'あなた',
-    paths,
+    tree: copyTree(state.stage),
   });
-  next = { ...next, index: [], merging: null };
+  next = { ...next, index: [], pausing: null, work: copyTree(state.stage) };
   next = setBranch(next, branch, id);
   next = { ...next, tracked: recomputeTracked(next, id) };
   next = recordReflog(next, 'merge', text, head, id);
@@ -171,7 +189,7 @@ function finishMerge(state: RepoState, message: string): CommandResult {
     next,
     [
       `[${branch} ${id}] ${text}`,
-      `${merging.from} の取り込みが完了しました。ぶつかった ${paths.length} 件は、ここで 1 つに決まっています。`,
+      `${pausing.from} の取り込みが完了しました。ぶつかった ${paths.length} 件は、ここで 1 つに決まっています。`,
       'このコミットだけが親を 2 つ持ちます。グラフで線が 2 本入ってくるのがそれです。',
     ],
     ['index', 'repo', 'head'],

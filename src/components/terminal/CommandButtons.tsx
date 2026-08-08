@@ -6,6 +6,7 @@ import {
   currentBranchName,
   headCommitId,
   isAncestor,
+  pausingWays,
   reachableCommits,
   type RepoState,
 } from '@/lib/git-engine';
@@ -105,30 +106,44 @@ export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?
 
   if (!state.initialized) {
     now({ label: 'git init', line: 'git init', hint: 'ここから始まります' });
-  } else if (state.merging) {
+  } else if (state.pausing) {
     /*
-     * マージが止まっている間は、通るコマンドだけを出す。
+     * 止まっている間は、通るコマンドだけを出す。
      * 押しても断られるボタンが並んでいると、詰まった人がさらに迷う。
+     *
+     * 続け方は merge / rebase / cherry-pick で違うので、
+     * いま止まっているものに合わせたボタンだけを出す。
      */
-    for (const path of state.merging.conflicts) {
+    const ways = pausingWays(state.pausing.kind);
+
+    // 片側を選ぶ → add、の順に並べる。目印を手で消すより、これがいちばん早い
+    for (const c of state.pausing.conflicts) {
       now({
-        label: `git add ${path}`,
-        line: `git add ${path}`,
-        hint: '決着をつけた印',
+        label: `git checkout --ours ${c.path}`,
+        line: `git checkout --ours ${c.path}`,
+        hint: 'こちら側を残す',
         weight: 0,
       });
+      now({
+        label: `git checkout --theirs ${c.path}`,
+        line: `git checkout --theirs ${c.path}`,
+        hint: '向こう側を残す',
+        weight: 0,
+      });
+      now({
+        label: `git add ${c.path}`,
+        line: `git add ${c.path}`,
+        hint: '決着をつけた印',
+        weight: 1,
+      });
     }
-    if (state.merging.conflicts.length === 0) {
-      now({ label: 'git commit', line: 'git commit', hint: 'マージを完了する', weight: 0 });
+    if (state.pausing.conflicts.length === 0) {
+      now({ label: ways.next, line: ways.next, hint: '先へ進める', weight: 0 });
     }
-    now({
-      label: 'git merge --abort',
-      line: 'git merge --abort',
-      hint: '始める前に戻す',
-      weight: 1,
-    });
+    now({ label: ways.abort, line: ways.abort, hint: '始める前に戻す', weight: 2 });
     now({ label: 'git status', line: 'git status', weight: 3 });
-    now({ label: 'git log', line: 'git log', weight: 4 });
+    now({ label: 'git diff', line: 'git diff', hint: 'ぶつかった中身を見る', weight: 3 });
+    more({ label: 'git log', line: 'git log' });
   } else {
     /*
      * 課題が名前を指定しているなら、それを出す。
@@ -304,6 +319,12 @@ export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?
     }
 
     now({ label: 'git status', line: 'git status', weight: 4 });
+    if (state.workingDir.length > 0) {
+      now({ label: 'git diff', line: 'git diff', hint: 'まだ add していない行', weight: 2 });
+    }
+    if (state.index.length > 0) {
+      more({ label: 'git diff --staged', line: 'git diff --staged', hint: 'add したぶんの行' });
+    }
     more({ label: 'git log --oneline', line: 'git log --oneline', hint: '1 行ずつ短く' });
     more({ label: 'git log --all', line: 'git log --all', hint: '辿れないものも出す' });
     if (head) {

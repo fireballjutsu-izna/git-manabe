@@ -406,7 +406,7 @@ async function main(): Promise<void> {
     const beforeConflict = await page.locator('[data-commit]').count();
 
     await type(page, 'git merge feature');
-    check('ぶつかると専用のパネルが出る', await countEventually(page, '[data-pane="merging"]', 1), 1);
+    check('ぶつかると専用のパネルが出る', await countEventually(page, '[data-pane="pausing"]', 1), 1);
     check('止まってもコミットは増えない', await page.locator('[data-commit]').count(), beforeConflict);
     check(
       'ぶつかったファイルが作業ディレクトリに出る',
@@ -415,8 +415,29 @@ async function main(): Promise<void> {
     );
     check('止まっている間はクリアにならない', await page.locator('[data-testid="cleared"]').count(), 0);
 
+    /*
+     * 目印が本当に書き込まれていること。ここが行単位になった証拠になる。
+     *
+     * ターミナルの中だけを数える ― 読み上げ用の領域（role=status）にも
+     * 同じ文が入るので、ページ全体で数えると必ず 2 になる。
+     */
+    await type(page, 'git diff');
+    check(
+      'ファイルに目印が書き込まれている',
+      await countEventually(page, '.xterm-screen >> text=<<<<<<< HEAD', 1),
+      1,
+    );
+
+    // 目印が残ったままの add は断る（本物は通してしまうところ）
+    await type(page, 'git add app.ts');
+    check(
+      '目印が残ったままの add は断られる',
+      await countEventually(page, '.xterm-screen >> text=まだコンフリクトの目印が残っています', 1),
+      1,
+    );
+
     await type(page, 'git merge --abort');
-    check('--abort でパネルが消える', await countEventually(page, '[data-pane="merging"]', 0), 0);
+    check('--abort でパネルが消える', await countEventually(page, '[data-pane="pausing"]', 0), 0);
     check(
       '--abort で作業ディレクトリも元通り',
       await page.locator('[data-pane="workingDir"]').getByText('変更はありません').count(),
@@ -424,15 +445,16 @@ async function main(): Promise<void> {
     );
 
     await type(page, 'git merge feature');
+    await type(page, 'git checkout --ours app.ts');
     await type(page, 'git add app.ts');
     check(
       'add すると commit できると教えてくれる',
-      await page.locator('[data-pane="merging"]').getByText('git commit').count(),
+      await page.locator('[data-pane="pausing"]').getByText('git commit').count(),
       1,
     );
 
     await type(page, 'git commit');
-    check('commit でパネルが消える', await countEventually(page, '[data-pane="merging"]', 0), 0);
+    check('commit でパネルが消える', await countEventually(page, '[data-pane="pausing"]', 0), 0);
     check(
       'マージコミットが 1 つ増える',
       await countEventually(page, '[data-commit]', beforeConflict + 1),
@@ -662,8 +684,9 @@ async function main(): Promise<void> {
     await page.goto(`${BASE}/scenarios/clash/`, { waitUntil: 'networkidle' });
     await page.locator('#command-input').waitFor({ timeout: 15_000 });
     await send('git merge spring');
-    check('止まると専用のパネルが出る', await countEventually(page, '[data-pane="merging"]', 1), 1);
+    check('止まると専用のパネルが出る', await countEventually(page, '[data-pane="pausing"]', 1), 1);
     check('その先の依頼が届く', await countEventually(page, '[data-step]', 2), 2);
+    await send('git checkout --theirs vase.txt');
     await send('git add vase.txt');
     await send('git commit');
     check(
