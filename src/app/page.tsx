@@ -28,6 +28,12 @@ export default function HomePage() {
           レベルを始める →
         </Link>
         <Link prefetch={false}
+          href="/scenarios"
+          className="inline-block rounded-card border border-line px-5 py-2.5 text-muted no-underline hover:border-line-lit hover:text-fg"
+        >
+          仕事として解く（シナリオ）
+        </Link>
+        <Link prefetch={false}
           href="/docs"
           className="inline-block rounded-card border border-line px-5 py-2.5 text-muted no-underline hover:border-line-lit hover:text-fg"
         >
@@ -41,7 +47,8 @@ export default function HomePage() {
         </Link>
       </div>
       <p className="mt-3 text-xs text-muted">
-        レベルと記事はどちらも 13 個で、同じ順・同じ題です。行き来しながら進められます。
+        レベルと記事はどちらも 13 個で、同じ順・同じ題です。
+        シナリオは、それを組み合わせた実務の 1 場面を一続きに解きます。
         クリアの記録と連続日数は、この端末の中だけに残ります。
       </p>
 

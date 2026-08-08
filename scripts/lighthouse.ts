@@ -48,6 +48,7 @@ const PAGES: { path: string; performance?: number }[] = [
   { path: '/docs/' },
   { path: '/docs/areas/' },
   { path: '/levels/', performance: 0.8 },
+  { path: '/scenarios/' },
   { path: '/sandbox/', performance: 0.8 },
 ];
 

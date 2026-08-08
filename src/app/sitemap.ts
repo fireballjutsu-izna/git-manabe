@@ -1,6 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { DOCS } from '@/lib/docs';
 import { LEVELS } from '@/lib/levels';
+import { SCENARIOS } from '@/lib/scenarios';
 import { SITE } from '@/lib/site';
 
 /**
@@ -20,8 +21,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: at('/start/'), priority: 0.8 },
     { url: at('/docs/'), priority: 0.8 },
     { url: at('/levels/'), priority: 0.8 },
+    { url: at('/scenarios/'), priority: 0.8 },
     { url: at('/sandbox/'), priority: 0.8 },
     ...DOCS.map((doc) => ({ url: at(`/docs/${doc.id}/`), priority: 0.7 })),
+    ...SCENARIOS.map((s) => ({ url: at(`/scenarios/${s.id}/`), priority: 0.7 })),
     ...LEVELS.map((level) => ({ url: at(`/levels/${level.id}/`), priority: 0.6 })),
   ];
 }

@@ -31,6 +31,8 @@ const PAGES = [
   // 表・コードブロック・記事内リンクがいちばん多い 1 本を代表に選ぶ
   '/docs/reset-modes/',
   '/levels/',
+  '/scenarios/',
+  '/scenarios/hotfix/',
   '/sandbox/',
   '/levels/conflict/',
 ];
