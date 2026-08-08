@@ -1,21 +1,14 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { SITE, siteTitle } from '@/lib/site';
+import { pageMetadata } from '@/lib/seo';
+import { SITE } from '@/lib/site';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: { default: siteTitle(), template: `%s｜${SITE.name}` },
-  description: SITE.description,
-  openGraph: {
-    type: 'website',
-    siteName: SITE.name,
-    title: siteTitle(),
-    description: SITE.description,
-    url: SITE.url,
-    locale: 'ja_JP',
-  },
-  twitter: { card: 'summary' },
+  // 相対で書いた canonical や og:image を、この URL の下で解決させる
+  metadataBase: new URL(SITE.url),
+  ...pageMetadata({ description: SITE.description, path: '/' }),
 };
 
 /**
@@ -49,17 +42,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             改行を禁じたうえで、入りきらないぶんは横に流す。
           */}
           <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
-            <Link href="/" className="flex shrink-0 items-baseline gap-2 no-underline">
+            <Link prefetch={false} href="/" className="flex shrink-0 items-baseline gap-2 no-underline">
               <span className="text-lg font-bold tracking-wide text-accent">{SITE.name}</span>
               <span className="hidden text-xs text-muted sm:inline">{SITE.tagline}</span>
             </Link>
             <nav className="ml-auto flex min-w-0 items-center gap-0.5 overflow-x-auto text-sm sm:gap-1">
               {[
                 { href: '/start', label: 'はじめに' },
+                { href: '/docs', label: '記事' },
                 { href: '/levels', label: 'レベル' },
                 { href: '/sandbox', label: 'サンドボックス' },
               ].map((item) => (
-                <Link
+                <Link prefetch={false}
                   key={item.href}
                   href={item.href}
                   className="rounded px-2 py-1.5 whitespace-nowrap text-muted no-underline hover:bg-inset hover:text-fg sm:px-2.5"

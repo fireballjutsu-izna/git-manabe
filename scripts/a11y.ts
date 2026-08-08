@@ -23,7 +23,17 @@ const AXE = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 const PORT = 4340;
 const ROOT = join(process.cwd(), 'out');
 const BASE = `http://127.0.0.1:${PORT}/git-manabe`;
-const PAGES = ['/', '/start/', '/levels/', '/sandbox/', '/levels/conflict/'];
+const PAGES = [
+  '/',
+  '/start/',
+  '/docs/',
+  '/docs/areas/',
+  // 表・コードブロック・記事内リンクがいちばん多い 1 本を代表に選ぶ
+  '/docs/reset-modes/',
+  '/levels/',
+  '/sandbox/',
+  '/levels/conflict/',
+];
 
 const failures: string[] = [];
 

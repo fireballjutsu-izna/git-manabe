@@ -58,7 +58,7 @@ export function LevelList() {
           const done = loaded && progress.cleared[level.id] !== undefined;
           return (
             <li key={level.id}>
-              <Link
+              <Link prefetch={false}
                 href={`/levels/${level.id}`}
                 data-level={level.id}
                 data-cleared={done ? 'true' : undefined}
@@ -91,7 +91,7 @@ export function LevelList() {
       <p className="mt-8 text-xs leading-relaxed text-muted">
         記録はこの端末の中だけに保存されます（localStorage）。アカウントはありません。
         自由に触りたいときは{' '}
-        <Link href="/sandbox" className="text-cyan-neon underline underline-offset-2">
+        <Link prefetch={false} href="/sandbox" className="text-cyan-neon underline underline-offset-2">
           サンドボックス
         </Link>
         へどうぞ。

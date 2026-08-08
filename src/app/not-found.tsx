@@ -17,19 +17,19 @@ export default function NotFound() {
       </p>
 
       <div className="mt-6 flex flex-wrap gap-2 text-sm">
-        <Link
+        <Link prefetch={false}
           href="/levels"
           className="rounded border border-line-lit px-4 py-2 text-fg no-underline hover:border-cyan-neon"
         >
           レベル一覧
         </Link>
-        <Link
+        <Link prefetch={false}
           href="/sandbox"
           className="rounded border border-line px-4 py-2 text-muted no-underline hover:border-line-lit hover:text-fg"
         >
           サンドボックス
         </Link>
-        <Link
+        <Link prefetch={false}
           href="/start"
           className="rounded border border-line px-4 py-2 text-muted no-underline hover:border-line-lit hover:text-fg"
         >

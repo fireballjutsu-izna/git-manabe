@@ -97,8 +97,42 @@ export const LEVELS: Level[] = [
     ],
   },
   {
+    id: 'conflict',
+    title: 'コンフリクト ― 止まるだけで、壊れない',
+    intro:
+      '分かれたあと、両側が同じファイルを変えていると、Git はどちらを残すか決められません。そのときマージは途中で止まります。失敗ではなく、判断をこちらに渡してきただけです。',
+    task: 'main で feature を取り込んでください。ぶつかったら、決着をつけてマージを完了させます。',
+    setup: [
+      'git init',
+      'touch app.ts',
+      'touch readme.md',
+      'git add .',
+      'git commit -m 根',
+      'git switch -c feature',
+      'edit app.ts',
+      'git add .',
+      'git commit -m 枝で app.ts を直した',
+      'git switch main',
+      'edit app.ts',
+      'git add .',
+      'git commit -m 幹でも app.ts を直した',
+    ],
+    check: (s) => {
+      // 止まったまま終わっていないこと、そのうえで合流点ができていること
+      if (s.merging !== null) return false;
+      const head = headCommitId(s);
+      return head !== null && s.commits[head].parents.length === 2;
+    },
+    hints: [
+      'まず git merge feature を打ってください。app.ts でぶつかって、そこで止まります。',
+      '止まっている間は git status で状況を確かめられます。やめたくなったら git merge --abort でいつでも戻れます。',
+      '決着をつけたファイルは git add app.ts で印を付けます。専用のコマンドはありません。',
+      '全部片付いたら git commit です。親を 2 つ持つマージコミットができて、止まった状態が解けます。',
+    ],
+  },
+  {
     id: 'reset-modes',
-    title: 'reset の 3 モード',
+    title: 'reset の 3 つのモード',
     intro:
       '--soft / --mixed / --hard は、どれも枝を同じだけ動かします。違うのは、取り消した変更をどこまで巻き添えにするかだけです。',
     task: '直前のコミットを取り消しつつ、その中身はステージに残してください。',
@@ -128,12 +162,7 @@ export const LEVELS: Level[] = [
       'reset は履歴を後ろへ動かします。revert は履歴を 1 つも消さず、逆向きの変更を前に足します。共有した履歴を直せるのは後者だけです。',
     task: '直前のコミットを、履歴を消さずに打ち消してください。',
     setup: ['git init', 'git commit -m 一つ目', 'git commit -m 消したい変更'],
-    goal: [
-      'git init',
-      'git commit -m 一つ目',
-      'git commit -m 消したい変更',
-      'git revert HEAD',
-    ],
+    goal: ['git init', 'git commit -m 一つ目', 'git commit -m 消したい変更', 'git revert HEAD'],
     hints: ['git revert HEAD です。', 'コミットが減るのではなく、増えることを確かめてください。'],
   },
   {
@@ -258,40 +287,6 @@ export const LEVELS: Level[] = [
       'git fetch origin だと、origin/main は動きますが main は動きません。',
       '取り込むところまでやるのが git pull です。',
       'git pull origin main です。',
-    ],
-  },
-  {
-    id: 'conflict',
-    title: 'コンフリクト ― 止まるだけで、壊れない',
-    intro:
-      '分かれたあと、両側が同じファイルを変えていると、Git はどちらを残すか決められません。そのときマージは途中で止まります。失敗ではなく、判断をこちらに渡してきただけです。',
-    task: 'main で feature を取り込んでください。ぶつかったら、決着をつけてマージを完了させます。',
-    setup: [
-      'git init',
-      'touch app.ts',
-      'touch readme.md',
-      'git add .',
-      'git commit -m 根',
-      'git switch -c feature',
-      'edit app.ts',
-      'git add .',
-      'git commit -m 枝で app.ts を直した',
-      'git switch main',
-      'edit app.ts',
-      'git add .',
-      'git commit -m 幹でも app.ts を直した',
-    ],
-    check: (s) => {
-      // 止まったまま終わっていないこと、そのうえで合流点ができていること
-      if (s.merging !== null) return false;
-      const head = headCommitId(s);
-      return head !== null && s.commits[head].parents.length === 2;
-    },
-    hints: [
-      'まず git merge feature を打ってください。app.ts でぶつかって、そこで止まります。',
-      '止まっている間は git status で状況を確かめられます。やめたくなったら git merge --abort でいつでも戻れます。',
-      '決着をつけたファイルは git add app.ts で印を付けます。専用のコマンドはありません。',
-      '全部片付いたら git commit です。親を 2 つ持つマージコミットができて、止まった状態が解けます。',
     ],
   },
 ];

@@ -21,13 +21,19 @@ export default function HomePage() {
       </p>
 
       <div className="mt-8 flex flex-wrap gap-3">
-        <Link
+        <Link prefetch={false}
           href="/levels"
           className="inline-block rounded-card border border-line-lit bg-tint-cyan px-5 py-2.5 font-bold text-fg no-underline hover:border-cyan-neon"
         >
           レベルを始める →
         </Link>
-        <Link
+        <Link prefetch={false}
+          href="/docs"
+          className="inline-block rounded-card border border-line px-5 py-2.5 text-muted no-underline hover:border-line-lit hover:text-fg"
+        >
+          読んで理解する（記事）
+        </Link>
+        <Link prefetch={false}
           href="/sandbox"
           className="inline-block rounded-card border border-line px-5 py-2.5 text-muted no-underline hover:border-line-lit hover:text-fg"
         >
@@ -35,7 +41,7 @@ export default function HomePage() {
         </Link>
       </div>
       <p className="mt-3 text-xs text-muted">
-        レベルは 13 個。1 つにつき概念 1 つで、状況はこちらで用意します。
+        レベルと記事はどちらも 13 個で、同じ順・同じ題です。行き来しながら進められます。
         クリアの記録と連続日数は、この端末の中だけに残ります。
       </p>
 

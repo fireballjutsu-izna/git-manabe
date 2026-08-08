@@ -13,7 +13,9 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "smoke": "node scripts/smoke.ts",
-    "a11y": "node scripts/a11y.ts"
+    "a11y": "node scripts/a11y.ts",
+    "og": "node scripts/make-og.ts",
+    "lighthouse": "node scripts/lighthouse.ts"
   },
   "dependencies": {
     "@mdx-js/loader": "^3.1.1",
@@ -40,6 +42,7 @@
     "axe-core": "^4.13.0",
     "eslint": "^9.39.0",
     "eslint-config-next": "15.5.23",
+    "lighthouse": "^13.4.1",
     "playwright": "^1.62.0",
     "prettier": "^3.4.0",
     "tailwindcss": "^4.3.3",
