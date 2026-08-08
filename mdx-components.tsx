@@ -1,4 +1,5 @@
 import type { MDXComponents } from 'mdx/types';
+import Link from 'next/link';
 
 /**
  * MDX 記事の中の素の HTML 要素に、サイト共通の見た目を与える。
@@ -14,9 +15,29 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
     p: (props) => <p className="my-4 leading-loose" {...props} />,
     ul: (props) => <ul className="my-4 list-disc space-y-1 pl-6" {...props} />,
     ol: (props) => <ol className="my-4 list-decimal space-y-1 pl-6" {...props} />,
-    a: (props) => (
-      <a className="text-cyan-neon underline underline-offset-2" {...props} />
-    ),
+    /*
+     * サイト内のリンクは next/link に通す。
+     *
+     * Markdown の [題](/docs/areas) は素の <a> になるが、それだと
+     * **basePath（/git-manabe）が付かない** ― GitHub Pages では
+     * ドメイン直下へ飛んでしまい、記事から張ったリンクが全部 404 になる。
+     * next/link なら basePath も末尾スラッシュも面倒を見てくれる。
+     */
+    a: ({ href = '', ...props }) => {
+      const style = 'text-cyan-neon underline underline-offset-2';
+      if (href.startsWith('/')) {
+        return <Link prefetch={false} href={href} className={style} {...props} />;
+      }
+      const external = href.startsWith('http');
+      return (
+        <a
+          href={href}
+          className={style}
+          {...(external ? { target: '_blank', rel: 'noreferrer noopener' } : {})}
+          {...props}
+        />
+      );
+    },
     strong: (props) => <strong className="font-bold text-fg" {...props} />,
     table: (props) => (
       <div className="my-6 overflow-x-auto">
