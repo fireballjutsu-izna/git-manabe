@@ -6,6 +6,7 @@ import {
   headCommitId,
   nextCommitId,
   ok,
+  recomputeTracked,
   recordReflog,
   requireRepo,
   setBranch,
@@ -38,6 +39,12 @@ export function commit(state: RepoState, command: ParsedCommand): CommandResult 
   if (blocked) return blocked;
 
   const message = flagValue(command, '-m', '--message');
+
+  // マージの途中なら、commit の意味が変わる ― 続きではなく「決着の確定」になる
+  if (state.merging) {
+    return finishMerge(state, typeof message === 'string' ? message.trim() : '');
+  }
+
   if (typeof message !== 'string' || !message.trim()) {
     return fail(state, 'コミットメッセージが必要です。', '例: git commit -m "最初のコミット"');
   }
@@ -113,6 +120,59 @@ export function commit(state: RepoState, command: ParsedCommand): CommandResult 
       `[${branch ?? 'detached HEAD'} ${id}] ${message.trim()}`,
       `${committedPaths.length} 件を記録しました: ${committedPaths.join(', ')}`,
       ...notes,
+    ],
+    ['index', 'repo', 'head'],
+  );
+}
+
+/**
+ * 途中で止まっていたマージを、コミットして完了させる。
+ *
+ * 打つコマンドは普段と同じ `git commit` だが、できるものが違う ―
+ * 親を 2 つ持つマージコミットが 1 つできて、止まっていた状態が解ける。
+ * コンフリクトの後始末に専用のコマンドが無いのは、これが「ただのコミット」だから。
+ */
+function finishMerge(state: RepoState, message: string): CommandResult {
+  const merging = state.merging;
+  if (!merging) return fail(state, 'いまマージの途中ではありません。');
+
+  if (merging.conflicts.length > 0) {
+    return fail(
+      state,
+      `まだ決着のついていないファイルがあります: ${merging.conflicts.join(', ')}`,
+      '直したファイルを git add してください。やめるなら git merge --abort です。',
+    );
+  }
+
+  const branch = currentBranchName(state);
+  const head = headCommitId(state);
+  if (!branch || !head) {
+    return fail(state, 'マージの結果を受け取る枝が見つかりません。');
+  }
+
+  const id = nextCommitId(state);
+  // 本物の Git はここでメッセージを用意してエディタを開く。同じ既定文を使う
+  const text = message || `Merge ${merging.from} into ${branch}`;
+  const paths = state.index.map((f) => f.path);
+
+  let next = addCommit(state, {
+    id,
+    parents: [head, merging.theirs],
+    message: text,
+    author: 'あなた',
+    paths,
+  });
+  next = { ...next, index: [], merging: null };
+  next = setBranch(next, branch, id);
+  next = { ...next, tracked: recomputeTracked(next, id) };
+  next = recordReflog(next, 'merge', text, head, id);
+
+  return ok(
+    next,
+    [
+      `[${branch} ${id}] ${text}`,
+      `${merging.from} の取り込みが完了しました。ぶつかった ${paths.length} 件は、ここで 1 つに決まっています。`,
+      'このコミットだけが親を 2 つ持ちます。グラフで線が 2 本入ってくるのがそれです。',
     ],
     ['index', 'repo', 'head'],
   );

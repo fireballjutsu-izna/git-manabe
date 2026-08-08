@@ -28,6 +28,28 @@ export function CommandButtons() {
 
   if (!state.initialized) {
     suggestions.push({ label: 'git init', line: 'git init', hint: 'ここから始まります' });
+  } else if (state.merging) {
+    /*
+     * マージが止まっている間は、通るコマンドだけを出す。
+     * 押しても断られるボタンが並んでいると、詰まった人がさらに迷う。
+     */
+    for (const path of state.merging.conflicts) {
+      suggestions.push({
+        label: `git add ${path}`,
+        line: `git add ${path}`,
+        hint: '決着をつけた印',
+      });
+    }
+    if (state.merging.conflicts.length === 0) {
+      suggestions.push({ label: 'git commit', line: 'git commit', hint: 'マージを完了する' });
+    }
+    suggestions.push({
+      label: 'git merge --abort',
+      line: 'git merge --abort',
+      hint: '始める前に戻す',
+    });
+    suggestions.push({ label: 'git status', line: 'git status' });
+    suggestions.push({ label: 'git log', line: 'git log' });
   } else {
     const file = `file-${state.tracked.length + state.workingDir.length + 1}.txt`;
     suggestions.push({ label: `touch ${file}`, line: `touch ${file}`, hint: '変更を 1 つ作る' });

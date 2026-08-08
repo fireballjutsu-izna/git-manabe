@@ -43,6 +43,12 @@ export function AreaPanes({
 
   return (
     <div className="grid gap-3">
+      {/*
+        マージが止まっているときは、いちばん上に出す。
+        3 領域より先に目に入らないと、「何が起きたのか分からないまま次を打つ」になる。
+      */}
+      {state.merging && <MergePane state={state} />}
+
       <Pane
         id="workingDir"
         title="作業ディレクトリ"
@@ -54,7 +60,8 @@ export function AreaPanes({
         items={state.workingDir.map((f) => ({
           key: f.path,
           label: f.path,
-          badge: f.status === 'untracked' ? 'untracked' : 'modified',
+          badge: f.status === 'conflicted' ? '両方が変更' : f.status,
+          alert: f.status === 'conflicted',
         }))}
       />
 
@@ -215,10 +222,68 @@ function RemotePane({ state }: { state: RepoState }) {
   );
 }
 
+/**
+ * 途中で止まっているマージ。
+ *
+ * ここで伝えたいことは 1 つだけ ―「止まっているだけで、壊れていない」。
+ * 出口が 2 つ（決着をつける／やめる）あることを、両方その場に書いておく。
+ */
+function MergePane({ state }: { state: RepoState }) {
+  const merging = state.merging;
+  if (!merging) return null;
+
+  const done = merging.conflicts.length === 0;
+
+  return (
+    <div
+      data-pane="merging"
+      className="rounded-card border border-detached bg-tint-rose px-3 py-2 text-xs"
+      aria-live="polite"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-bold text-detached">マージが途中で止まっています</span>
+        <code className="shrink-0 font-mono text-[11px] text-muted">{merging.from}</code>
+      </div>
+
+      {done ? (
+        <p className="mt-1 leading-relaxed text-fg">
+          全部片付きました。<code className="font-mono">git commit</code> で完了できます。
+        </p>
+      ) : (
+        <>
+          <ul className="mt-1.5 space-y-0.5">
+            {merging.conflicts.map((path) => (
+              <li key={path} className="flex items-center justify-between gap-2">
+                <code className="truncate font-mono text-[11px] text-fg">{path}</code>
+                <span className="shrink-0 rounded border border-detached px-1 text-[10px] text-detached">
+                  両方が変更
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-1.5 leading-relaxed text-muted">
+            どちらを残すかは Git には決められません。決着をつけたら
+            <code className="font-mono text-fg"> git add </code>
+            で印を付けてください。
+          </p>
+        </>
+      )}
+
+      <p className="mt-1 leading-relaxed text-muted">
+        コミットは 1 つも増えていません。
+        <code className="font-mono text-fg"> git merge --abort </code>
+        で、始める前の状態に戻せます。
+      </p>
+    </div>
+  );
+}
+
 interface Item {
   key: string;
   label: string;
   badge: string;
+  /** 目を引かせたいもの（いまはコンフリクトだけ）。 */
+  alert?: boolean;
 }
 
 /**
@@ -279,7 +344,14 @@ function Pane({
               className="flex items-center justify-between gap-2 overflow-hidden"
             >
               <code className="truncate font-mono text-xs text-fg">{item.label}</code>
-              <span className="shrink-0 rounded border border-line px-1 text-[10px] text-muted">
+              <span
+                className={[
+                  'shrink-0 rounded border px-1 text-[10px]',
+                  item.alert
+                    ? 'border-detached text-detached'
+                    : 'border-line text-muted',
+                ].join(' ')}
+              >
                 {item.badge}
               </span>
             </motion.li>

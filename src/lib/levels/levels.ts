@@ -260,6 +260,40 @@ export const LEVELS: Level[] = [
       'git pull origin main です。',
     ],
   },
+  {
+    id: 'conflict',
+    title: 'コンフリクト ― 止まるだけで、壊れない',
+    intro:
+      '分かれたあと、両側が同じファイルを変えていると、Git はどちらを残すか決められません。そのときマージは途中で止まります。失敗ではなく、判断をこちらに渡してきただけです。',
+    task: 'main で feature を取り込んでください。ぶつかったら、決着をつけてマージを完了させます。',
+    setup: [
+      'git init',
+      'touch app.ts',
+      'touch readme.md',
+      'git add .',
+      'git commit -m 根',
+      'git switch -c feature',
+      'edit app.ts',
+      'git add .',
+      'git commit -m 枝で app.ts を直した',
+      'git switch main',
+      'edit app.ts',
+      'git add .',
+      'git commit -m 幹でも app.ts を直した',
+    ],
+    check: (s) => {
+      // 止まったまま終わっていないこと、そのうえで合流点ができていること
+      if (s.merging !== null) return false;
+      const head = headCommitId(s);
+      return head !== null && s.commits[head].parents.length === 2;
+    },
+    hints: [
+      'まず git merge feature を打ってください。app.ts でぶつかって、そこで止まります。',
+      '止まっている間は git status で状況を確かめられます。やめたくなったら git merge --abort でいつでも戻れます。',
+      '決着をつけたファイルは git add app.ts で印を付けます。専用のコマンドはありません。',
+      '全部片付いたら git commit です。親を 2 つ持つマージコミットができて、止まった状態が解けます。',
+    ],
+  },
 ];
 
 export function findLevel(id: string): Level | undefined {

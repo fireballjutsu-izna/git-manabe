@@ -24,6 +24,26 @@ export function status(state: RepoState): CommandResult {
     lines.push('どの枝の上にもいません。ここでのコミットは、どの枝からも辿れなくなります。');
   }
 
+  /*
+   * マージの途中は、いちばん先に言う。
+   *
+   * 本物の Git もここを最初に出す ― 何が起きているか分からないまま
+   * 次のコマンドを打つのが、コンフリクトでいちばん怖い瞬間なので。
+   */
+  const merging = state.merging;
+  if (merging) {
+    lines.push('');
+    lines.push(`${merging.from} の取り込みが途中で止まっています。`);
+    if (merging.conflicts.length > 0) {
+      lines.push('決着のついていないファイル:');
+      for (const p of merging.conflicts) lines.push(`  両方が変更: ${p}`);
+      lines.push('直したら git add してください。全部片付くと git commit できます。');
+    } else {
+      lines.push('ぶつかっていたファイルは全部片付いています。git commit でマージを完了できます。');
+    }
+    lines.push('やめるなら git merge --abort です。');
+  }
+
   if (state.index.length > 0) {
     lines.push('');
     lines.push('コミットされる変更（ステージにあるもの）:');

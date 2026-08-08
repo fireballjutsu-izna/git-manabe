@@ -1,6 +1,8 @@
-import type { ParsedCommand } from '../parse';
+import { hasFlag, type ParsedCommand } from '../parse';
 import {
   addCommit,
+  commitsBetween,
+  pathsIn,
   currentBranchName,
   fail,
   headCommitId,
@@ -30,6 +32,16 @@ import type { CommandResult, RepoState } from '../types';
 export function merge(state: RepoState, command: ParsedCommand): CommandResult {
   const blocked = requireRepo(state);
   if (blocked) return blocked;
+
+  // --abort だけは、マージの途中でも受ける（というより、そのためにある）
+  if (hasFlag(command, '--abort')) return abort(state);
+  if (state.merging) {
+    return fail(
+      state,
+      'マージの途中です。もう 1 つ始めることはできません。',
+      'ぶつかったファイルを git add してから git commit するか、git merge --abort でやめられます。',
+    );
+  }
 
   const target = command.positional[0];
   if (!target) {
@@ -70,6 +82,45 @@ export function merge(state: RepoState, command: ParsedCommand): CommandResult {
 }
 
 /**
+ * `git merge --abort`
+ *
+ * 途中で止まっているマージを、なかったことにする。
+ * 「詰んだら戻れる」ことを先に知っておくと、コンフリクトは怖くなくなる。
+ */
+function abort(state: RepoState): CommandResult {
+  const merging = state.merging;
+  if (!merging) {
+    return fail(state, 'いまマージの途中ではありません。');
+  }
+  return ok(
+    {
+      ...state,
+      merging: null,
+      index: merging.savedIndex,
+      workingDir: merging.savedWorkingDir,
+    },
+    [
+      `${merging.from} の取り込みをやめました。`,
+      'マージを始める前の状態に戻っています。コミットは 1 つも増えていません。',
+    ],
+    ['workingDir', 'index'],
+  );
+}
+
+/**
+ * 両側が同じパスを変えていないかを見る。
+ *
+ * このサイトはファイルの中身を持たないので、行単位のぶつかりは作れない。
+ * 代わりに「分かれてから、両側が同じパスを触ったか」で判定する。
+ * 起きる理由（同じところを 2 人が変えた）は、これで十分に伝わる。
+ */
+function conflictingPaths(state: RepoState, head: string, theirs: string, base: string | null): string[] {
+  const ours = new Set(pathsIn(state, commitsBetween(state, base, head)));
+  const yours = pathsIn(state, commitsBetween(state, base, theirs));
+  return yours.filter((p) => ours.has(p)).sort();
+}
+
+/**
  * 自分が相手の祖先のとき。
  * 分かれていないので、新しいコミットを作る意味がない ― 名前を前へ滑らせるだけ。
  * 「マージしたのにマージコミットができない」のはここ。
@@ -89,6 +140,41 @@ function fastForward(state: RepoState, target: string, theirs: string): CommandR
       'ひと筋道の上を進んだだけなので、マージコミットは作られていません。',
     ],
     ['repo', 'head'],
+  );
+}
+
+/** コンフリクトで止まる。ここから add か --abort のどちらかへ進む。 */
+function pause(
+  state: RepoState,
+  from: string,
+  theirs: string,
+  base: string | null,
+  conflicts: string[],
+): CommandResult {
+  const conflicted = conflicts.map((path) => ({ path, status: 'conflicted' as const }));
+  const untouched = state.workingDir.filter((f) => !conflicts.includes(f.path));
+
+  return ok(
+    {
+      ...state,
+      workingDir: [...untouched, ...conflicted],
+      merging: {
+        from,
+        theirs,
+        base,
+        conflicts,
+        savedIndex: state.index,
+        savedWorkingDir: state.workingDir,
+      },
+    },
+    [
+      `${conflicts.length} 件がぶつかりました: ${conflicts.join(', ')}`,
+      '分かれたあと、両側が同じファイルを変えています。どちらを残すかは Git には決められません。',
+      'マージは途中で止まっています。壊れてはいません。',
+      '決着をつけたファイルを git add してから git commit すると、マージが完了します。',
+      'やめるなら git merge --abort です。始める前の状態に戻ります。',
+    ],
+    ['workingDir'],
   );
 }
 
@@ -112,6 +198,13 @@ function threeWay(
   }
 
   const base = mergeBase(state, head, theirs);
+
+  // 両側が同じパスを変えていたら、Git には決められない。途中で止める
+  const conflicts = conflictingPaths(state, head, theirs, base);
+  if (conflicts.length > 0) {
+    return pause(state, target, theirs, base, conflicts);
+  }
+
   const id = nextCommitId(state);
   const message = `Merge ${target} into ${branch}`;
 
