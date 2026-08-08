@@ -350,7 +350,7 @@ async function main(): Promise<void> {
     // ---- レベル ----
     // 一覧 → 1 つ解く → クリア記録が残り、一覧に反映される、まで通す
     await page.goto(`${BASE}/levels/`, { waitUntil: 'networkidle' });
-    check('レベルが 12 個並ぶ', await page.locator('[data-level]').count(), 12);
+    check('レベルが 13 個並ぶ', await page.locator('[data-level]').count(), 13);
     check(
       '最初はどれもクリアしていない',
       await page.locator('[data-level][data-cleared]').count(),
@@ -398,6 +398,47 @@ async function main(): Promise<void> {
       await countEventually(page, 'text=git rebase main です。', 1),
       1,
     );
+
+    // ---- コンフリクト ----
+    // 止まる → やめて元通り → もう一度やって決着をつける、まで通す
+    await page.goto(`${BASE}/levels/conflict/`, { waitUntil: 'networkidle' });
+    await page.locator('textarea.xterm-helper-textarea').waitFor({ timeout: 15_000 });
+    const beforeConflict = await page.locator('[data-commit]').count();
+
+    await type(page, 'git merge feature');
+    check('ぶつかると専用のパネルが出る', await countEventually(page, '[data-pane="merging"]', 1), 1);
+    check('止まってもコミットは増えない', await page.locator('[data-commit]').count(), beforeConflict);
+    check(
+      'ぶつかったファイルが作業ディレクトリに出る',
+      await page.locator('[data-pane="workingDir"]').getByText('両方が変更').count(),
+      1,
+    );
+    check('止まっている間はクリアにならない', await page.locator('[data-testid="cleared"]').count(), 0);
+
+    await type(page, 'git merge --abort');
+    check('--abort でパネルが消える', await countEventually(page, '[data-pane="merging"]', 0), 0);
+    check(
+      '--abort で作業ディレクトリも元通り',
+      await page.locator('[data-pane="workingDir"]').getByText('変更はありません').count(),
+      1,
+    );
+
+    await type(page, 'git merge feature');
+    await type(page, 'git add app.ts');
+    check(
+      'add すると commit できると教えてくれる',
+      await page.locator('[data-pane="merging"]').getByText('git commit').count(),
+      1,
+    );
+
+    await type(page, 'git commit');
+    check('commit でパネルが消える', await countEventually(page, '[data-pane="merging"]', 0), 0);
+    check(
+      'マージコミットが 1 つ増える',
+      await countEventually(page, '[data-commit]', beforeConflict + 1),
+      beforeConflict + 1,
+    );
+    check('解くとクリア表示が出る', await countEventually(page, '[data-testid="cleared"]', 1), 1);
 
     check('コンソールにエラーが出ていない', consoleErrors, []);
 

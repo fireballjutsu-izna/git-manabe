@@ -23,6 +23,7 @@ export function emptyState(): RepoState {
     stash: [],
     remotes: [],
     remoteBranches: [],
+    merging: null,
     reflog: [],
     seq: 0,
   };
@@ -375,6 +376,16 @@ export function ok(state: RepoState, log: string[], touched: Area[] = []): Comma
 /** 実行できなかったとき。state は素通しし、何も書き換えない。 */
 export function fail(state: RepoState, error: string, hint?: string): CommandResult {
   return { state, log: hint ? [error, hint] : [error], error, touched: [] };
+}
+
+/** マージの途中では打てないコマンドの、共通の断り文句。 */
+export function requireNoMerge(state: RepoState): CommandResult | null {
+  if (!state.merging) return null;
+  return fail(
+    state,
+    'マージの途中です。先に決着をつけてください。',
+    'ぶつかったファイルを git add してから git commit するか、git merge --abort でやめられます。',
+  );
 }
 
 /** `git init` が済んでいないときの、共通の断り文句。 */

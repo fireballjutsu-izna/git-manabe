@@ -45,11 +45,12 @@ export type Head = { type: 'branch'; ref: string } | { type: 'detached'; oid: st
 
 /**
  * ファイルの状態。中身は持たず、「Git から見てどの段階にあるか」だけを持つ。
- *   untracked … 一度もコミットされていない新しいファイル
- *   modified  … コミット済みだが、そのあと変更された
- *   staged    … 次のコミットに含めると決めた（index にある）
+ *   untracked  … 一度もコミットされていない新しいファイル
+ *   modified   … コミット済みだが、そのあと変更された
+ *   staged     … 次のコミットに含めると決めた（index にある）
+ *   conflicted … マージの両側が同じパスを変えていて、決着がついていない
  */
-export type FileStatus = 'untracked' | 'modified' | 'staged';
+export type FileStatus = 'untracked' | 'modified' | 'staged' | 'conflicted';
 
 export interface FileState {
   path: string;
@@ -70,6 +71,27 @@ export interface StashEntry {
   workingDir: FileState[];
   /** どのコミットの上で退避したか。 */
   base: string | null;
+}
+
+/**
+ * 途中で止まっているマージ。
+ *
+ * コンフリクトは「Git が勝手に決められなかった」というだけの状態で、
+ * 壊れているわけではない。だからこそ**途中で止まる**という形にする ―
+ * 決着をつける（add）か、なかったことにする（--abort）まで、ここに居続ける。
+ */
+export interface MergeInProgress {
+  /** ユーザーが打った取り込み相手の名前。 */
+  from: string;
+  /** 相手の先端。マージコミットの 2 番目の親になる。 */
+  theirs: string;
+  /** 分かれた地点。 */
+  base: string | null;
+  /** 両側が変えていて、決着がついていないパス。 */
+  conflicts: string[];
+  /** --abort で戻すための、マージ前の 3 領域。 */
+  savedIndex: FileState[];
+  savedWorkingDir: FileState[];
 }
 
 /**
@@ -129,6 +151,8 @@ export interface RepoState {
    * 自分では動かない。ここが古いままなのが、pull を忘れた状態。
    */
   remoteBranches: Ref[];
+  /** マージが途中で止まっているなら、その情報。 */
+  merging: MergeInProgress | null;
   reflog: ReflogEntry[];
   /** id の採番と createdAt の元になる単調カウンタ。Math.random() は使わない。 */
   seq: number;

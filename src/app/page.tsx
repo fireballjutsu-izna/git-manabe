@@ -35,7 +35,7 @@ export default function HomePage() {
         </Link>
       </div>
       <p className="mt-3 text-xs text-muted">
-        レベルは 12 個。1 つにつき概念 1 つで、状況はこちらで用意します。
+        レベルは 13 個。1 つにつき概念 1 つで、状況はこちらで用意します。
         クリアの記録と連続日数は、この端末の中だけに残ります。
       </p>
 
@@ -127,7 +127,7 @@ export default function HomePage() {
           </li>
         </ul>
         <p className="mt-5 text-sm text-muted">
-          cherry-pick も使えます。リモートとコンフリクト解決は、これから追加していきます。
+          cherry-pick・リモート（push / fetch / pull）・コンフリクトの解決も使えます。
         </p>
       </section>
     </div>

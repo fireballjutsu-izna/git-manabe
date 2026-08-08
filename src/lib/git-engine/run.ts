@@ -5,7 +5,7 @@ import {
   parseLine,
   type ParsedCommand,
 } from './parse';
-import { fail } from './state';
+import { fail, requireNoMerge } from './state';
 import { add } from './commands/add';
 import { branch } from './commands/branch';
 import { checkout, switchCommand } from './commands/checkout';
@@ -54,6 +54,28 @@ const HELPER_HANDLERS: Record<string, Handler> = {
   teammate,
 };
 
+/**
+ * マージが途中で止まっている間でも打てるコマンド。
+ *
+ * 本物の Git も、コンフリクト中は多くの操作を断る ―
+ * 決着がついていない状態の上に別の操作を重ねると、収拾がつかなくなるため。
+ * ここを絞っておくと、「まず決着をつける／やめる」の 2 択に自然と誘導できる。
+ *
+ * 見るだけのコマンド（status / log / reflog / branch）と、
+ * 決着に要るもの（add / commit / merge --abort / touch / edit）だけを通す。
+ */
+const ALLOWED_WHILE_MERGING = new Set([
+  'add',
+  'commit',
+  'merge',
+  'status',
+  'log',
+  'reflog',
+  'branch',
+  'touch',
+  'edit',
+]);
+
 /** 打ち間違いを拾って「もしかして」を出す。編集距離 1 までを近いとみなす。 */
 function nearest(name: string, candidates: readonly string[]): string | null {
   let best: string | null = null;
@@ -98,6 +120,11 @@ export function run(state: RepoState, line: string): CommandResult {
   }
 
   const command = parsed.command;
+
+  if (state.merging && !ALLOWED_WHILE_MERGING.has(command.name)) {
+    const blocked = requireNoMerge(state);
+    if (blocked) return blocked;
+  }
 
   if (command.isGit) {
     const handler = GIT_HANDLERS[command.name];
