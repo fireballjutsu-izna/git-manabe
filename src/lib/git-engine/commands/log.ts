@@ -1,3 +1,4 @@
+import { asciiGraph } from '../ascii';
 import { currentBranchName, headCommitId, ok, refsAt, requireRepo } from '../state';
 import { flagValue, type ParsedCommand } from '../parse';
 import type { Commit, CommandResult, RepoState } from '../types';
@@ -12,6 +13,7 @@ import type { Commit, CommandResult, RepoState } from '../types';
  *   --oneline   id とメッセージだけ
  *   -n <数>     件数を絞る（-3 のようにも書ける）
  *   --all       HEAD から辿れないものも出す
+ *   --graph     左に枝の形を描く（* と | と斜線）
  *
  * --all がいちばん学習に効く。reset や rebase で見えなくなったコミットが
  * **消えたのではなく、辿れなくなっただけ**だと、その場で確かめられる。
@@ -22,6 +24,7 @@ export function log(state: RepoState, command: ParsedCommand): CommandResult {
 
   const oneline = command.flags['--oneline'] === true;
   const all = command.flags['--all'] === true;
+  const graph = command.flags['--graph'] === true;
   const limit = countLimit(command);
 
   const head = headCommitId(state);
@@ -43,6 +46,16 @@ export function log(state: RepoState, command: ParsedCommand): CommandResult {
   const branch = currentBranchName(state);
   const lines: string[] = [];
 
+  /*
+   * --graph は、出すぶんだけでレーンを引き直す。
+   *
+   * 絵と行がずれると読めなくなるので、1 件 1 行に固定する ―
+   * 本物は --graph でも既定の書式のままだが、それだと絵が縦に間延びして、
+   * 枝の形がまったく追えなくなる。ここは読みやすさを取った。
+   */
+  const art = graph ? asciiGraph(state, limited.map((c) => c.id)) : [];
+  const artOf = new Map(art.map((r) => [r.id, r]));
+
   for (const c of limited) {
     const { branches, tags } = refsAt(state, c.id);
     const labels = [
@@ -53,6 +66,13 @@ export function log(state: RepoState, command: ParsedCommand): CommandResult {
     const suffix = labels.length > 0 ? ` (${labels.join(', ')})` : '';
     // --all のときだけ、辿れないものに印を付ける。これが無いと区別が付かない
     const lost = all && !reachable.has(c.id) ? '  ← ここからは辿れません' : '';
+
+    if (graph) {
+      const row = artOf.get(c.id);
+      lines.push(`${row?.art ?? ''}${c.id}${suffix} ${c.message}${lost}`);
+      if (row?.connector) lines.push(row.connector);
+      continue;
+    }
 
     if (oneline) {
       lines.push(`${c.id}${suffix} ${c.message}${lost}`);
@@ -83,6 +103,10 @@ export function log(state: RepoState, command: ParsedCommand): CommandResult {
     );
   } else {
     lines.push('ここから辿れないコミットは出ません。--all を付けると出ます。');
+  }
+
+  if (graph) {
+    lines.push('左の絵は、上の画面のグラフと同じものです。* がコミット、| が線です。');
   }
 
   return ok(state, lines, []);

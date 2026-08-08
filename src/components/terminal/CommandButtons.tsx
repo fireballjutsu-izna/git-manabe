@@ -388,6 +388,13 @@ export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?
       more({ label: 'git diff --staged', line: 'git diff --staged', hint: 'add したぶんの行' });
     }
     more({ label: 'git log --oneline', line: 'git log --oneline', hint: '1 行ずつ短く' });
+    if (Object.keys(state.commits).length > 1) {
+      more({
+        label: 'git log --graph',
+        line: 'git log --graph --all',
+        hint: 'ターミナルにも枝の形を出す',
+      });
+    }
     more({ label: 'git log --all', line: 'git log --all', hint: '辿れないものも出す' });
     if (head) {
       more({
