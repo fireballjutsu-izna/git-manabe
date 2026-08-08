@@ -22,6 +22,7 @@ import { fetch, pull, push } from './commands/sync';
 import { reset } from './commands/reset';
 import { stash } from './commands/stash';
 import { status } from './commands/status';
+import { tag } from './commands/tag';
 import type { CommandResult, RepoState } from './types';
 
 type Handler = (state: RepoState, command: ParsedCommand) => CommandResult;
@@ -40,6 +41,7 @@ const GIT_HANDLERS: Record<string, Handler> = {
   revert,
   stash,
   reflog,
+  tag,
   remote,
   push,
   fetch,
@@ -75,6 +77,24 @@ const ALLOWED_WHILE_MERGING = new Set([
   'touch',
   'edit',
 ]);
+
+/**
+ * 未実装のコマンドに、代わりになりそうなものを挙げる。
+ *
+ * 使えるコマンドを全部並べると 19 個になって読まれない。
+ * 「そのコマンドで何をしたかったのか」に近いものを 3 つまで出す。
+ */
+const RELATED: Record<string, string[]> = {
+  diff: ['git status', 'git log', 'git log --oneline'],
+  restore: ['git checkout', 'git reset --hard', 'git stash'],
+  rm: ['git reset', 'git checkout'],
+  mv: ['touch', 'git add'],
+  clone: ['git init', 'git remote add', 'git fetch'],
+};
+
+function related(name: string): string[] {
+  return RELATED[name] ?? ['git status', 'git log'];
+}
 
 /** 打ち間違いを拾って「もしかして」を出す。編集距離 1 までを近いとみなす。 */
 function nearest(name: string, candidates: readonly string[]): string | null {
@@ -131,10 +151,11 @@ export function run(state: RepoState, line: string): CommandResult {
     if (handler) return handler(state, command);
 
     if ((PLANNED_COMMANDS as readonly string[]).includes(command.name)) {
+      // 使えるコマンドを 19 個ぜんぶ並べても読まれない。近いものだけ挙げる
       return fail(
         state,
         `git ${command.name} は、まだこのサイトに入っていません。`,
-        `いま使えるのは ${GIT_COMMANDS.join(' / ')} です。`,
+        `近いものなら ${related(command.name).join(' / ')} が使えます。`,
       );
     }
 

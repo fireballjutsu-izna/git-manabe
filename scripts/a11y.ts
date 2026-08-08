@@ -224,6 +224,44 @@ async function main(): Promise<void> {
     const box = await status.boundingBox();
     check('読み上げ用の領域は画面に出ない', (box?.height ?? 99) <= 2, true);
     await sr.close();
+
+    // ---- 4. 折りたたみ ----
+    // 「ほかのコマンド」は details ではなくボタンにしてある。
+    // 開閉が読み上げに乗るのは aria-expanded だけなので、両方向を見る。
+    const fold = await open(browser, '/sandbox/');
+    // まっさらな状態では打てるのが git init だけなので、畳むものが無い。
+    // 1 つコミットして、畳んだ側が出る状態にしてから見る。
+    const foldInput = fold.locator('#command-input');
+    await foldInput.waitFor({ timeout: 15_000 });
+    for (const line of ['git init', 'git commit -m one']) {
+      await foldInput.fill(line);
+      await foldInput.press('Enter');
+      await fold.waitForTimeout(160);
+    }
+
+    const toggle = fold.locator('[data-more-toggle]');
+    await toggle.waitFor({ timeout: 15_000 });
+
+    check('閉じているとそう伝わる', await toggle.getAttribute('aria-expanded'), 'false');
+    check(
+      '開く先を指している',
+      await toggle.getAttribute('aria-controls'),
+      'more-commands',
+    );
+    check('閉じている間は中身が無い', await fold.locator('#more-commands').count(), 0);
+
+    // キーボードだけで開けること。マウス前提の折りたたみは開かれないまま終わる
+    await toggle.focus();
+    await fold.keyboard.press('Enter');
+    await fold.waitForTimeout(150);
+    check('開くとそう伝わる', await toggle.getAttribute('aria-expanded'), 'true');
+    check('指した先が現れる', await fold.locator('#more-commands').count(), 1);
+
+    await fold.keyboard.press('Enter');
+    await fold.waitForTimeout(150);
+    check('閉じ直せる', await toggle.getAttribute('aria-expanded'), 'false');
+    await axeScan(fold, '折りたたみ');
+    await fold.close();
   } finally {
     await browser.close();
     await server.close();

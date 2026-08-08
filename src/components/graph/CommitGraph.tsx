@@ -67,9 +67,18 @@ export function CommitGraph({
   const reduce = useReducedMotion();
   const layout = layoutGraph(state);
 
+  /* 位置が変わるとき用。行き過ぎない、落ち着いたばね */
   const spring = reduce
     ? { duration: 0 }
     : ({ type: 'spring', stiffness: 320, damping: 30 } as const);
+
+  /*
+   * 出てくるとき用。damping を下げて**わざと行き過ぎさせる**。
+   * 「増えた」ことを一瞬で気付かせたいので、落ち着くより目立つほうを取る。
+   */
+  const entry = reduce
+    ? { duration: 0 }
+    : ({ type: 'spring', stiffness: 260, damping: 11, mass: 0.7 } as const);
 
   if (layout.nodes.length === 0) {
     return (
@@ -120,6 +129,21 @@ export function CommitGraph({
 
   const headOid = state.head.type === 'detached' ? state.head.oid : null;
   const headBranch = state.head.type === 'branch' ? state.head.ref : null;
+  const headTarget = headOid ?? (headBranch ? branchTarget(state, headBranch) : null);
+  const headAt = headTarget ? placed.get(headTarget) : undefined;
+
+  /*
+   * 同じコミットへ入ってくる辺の、何本目か。
+   * マージは 2 本が同時に伸びると 1 本に見えてしまうので、
+   * 2 本目だけ遅らせて、順に合流したことが分かるようにする。
+   */
+  const incomingIndex = new Map<string, number>();
+  const incomingCount = new Map<string, number>();
+  for (const e of layout.edges) {
+    const n = incomingCount.get(e.to) ?? 0;
+    incomingIndex.set(`${e.from}->${e.to}`, n);
+    incomingCount.set(e.to, n + 1);
+  }
 
   /*
    * どの ref からも辿れなくなったコミット。
@@ -160,19 +184,25 @@ export function CommitGraph({
                 // 線の色は「どのレーンへ向かうか」で決める。
                 // そうすると、枝分かれした線が最後まで同じ色で追える。
                 const lane = laneOf.get(e.to) ?? 0;
+                const nth = incomingIndex.get(`${e.from}->${e.to}`) ?? 0;
                 return (
                   <motion.path
                     key={`${e.from}->${e.to}`}
                     d={edgePath(from, to)}
                     fill="none"
                     stroke={laneColor(lane)}
-                    strokeWidth={2}
                     strokeLinecap="round"
                     strokeOpacity={reachable.has(e.to) ? 1 : 0.34}
-                    initial={reduce ? false : { pathLength: 0, opacity: 0 }}
-                    animate={{ pathLength: 1, opacity: 1 }}
+                    // 太さも 0 から育てる。線が「伸びる」だけでなく「太る」ので、
+                    // 短い辺（親が 1 行上）でも動きとして見える
+                    initial={reduce ? false : { pathLength: 0, opacity: 0, strokeWidth: 0 }}
+                    animate={{ pathLength: 1, opacity: 1, strokeWidth: 2 }}
                     exit={{ opacity: 0 }}
-                    transition={reduce ? { duration: 0 } : { duration: 0.35, ease: 'easeOut' }}
+                    transition={
+                      reduce
+                        ? { duration: 0 }
+                        : { duration: 0.42, ease: 'easeOut', delay: nth * 0.16 }
+                    }
                   />
                 );
               })}
@@ -201,25 +231,46 @@ export function CommitGraph({
                   transition={spring}
                 >
                   {/*
+                    マージの波紋。合流点から 1 回だけ広がる。
+                    2 本目の辺が入り終わる頃に出したいので、少し遅らせる。
+                    ― 「2 つが 1 つに束ねられた」のは、静止画では伝わらないので。
+                  */}
+                  {isMerge && !reduce && (
+                    <motion.circle
+                      cx={p.cx}
+                      cy={p.cy}
+                      r={NODE_R}
+                      fill="none"
+                      stroke={color}
+                      strokeWidth={2}
+                      initial={{ scale: 0.5, opacity: 0.9 }}
+                      animate={{ scale: 3.6, opacity: 0 }}
+                      transition={{ duration: 0.95, delay: 0.45, ease: 'easeOut' }}
+                      style={{ transformOrigin: `${p.cx}px ${p.cy}px` }}
+                    />
+                  )}
+
+                  {/*
                     出てくるときの動き。
-                      florist … つぼみが開くように、ひねりながら大きくなる
-                      plain   … ただ大きくなる
-                    どちらも迷子になった瞬間に傾く（florist は萎れて見える）。
-                    マージだけは、線が 2 本入り終わってから 1 度だけ脈打たせる
-                    ― 「2 つが 1 つに束ねられた」のが、静止画では伝わらないので。
+                      florist … つぼみが 1 枚ずつ開く（Node の側でずらす）
+                      plain   … 行き過ぎてから戻る
+                    どちらも迷子になった瞬間に傾いて、少し落ちる。
+                    マージはそのうえで 1 度だけ脈打つ。
                   */}
                   <motion.g
                     initial={
-                      reduce ? false : { scale: 0.3, rotate: theme === 'florist' ? -50 : 0 }
+                      reduce ? false : { scale: 0.25, rotate: theme === 'florist' ? -60 : 0 }
                     }
                     animate={{
-                      scale: isMerge && !reduce ? [1, 1.28, 1] : 1,
-                      rotate: isOrphan && theme === 'florist' ? 20 : 0,
+                      scale: isMerge && !reduce ? [1, 1.34, 1] : 1,
+                      rotate: isOrphan ? (theme === 'florist' ? 22 : 12) : 0,
+                      // 迷子は枝から外れて落ちたので、行の中で少し下へずらす
+                      y: isOrphan ? 5 : 0,
                     }}
                     transition={
                       isMerge && !reduce
-                        ? { scale: { duration: 0.5, times: [0, 0.45, 1], delay: 0.3 }, rotate: spring }
-                        : spring
+                        ? { scale: { duration: 0.6, times: [0, 0.42, 1], delay: 0.4 }, rotate: spring, y: spring }
+                        : entry
                     }
                     style={{ transformOrigin: `${p.cx}px ${p.cy}px` }}
                   >
@@ -231,6 +282,7 @@ export function CommitGraph({
                       isHead={Boolean(isHead)}
                       isMerge={isMerge}
                       isOrphan={isOrphan}
+                      animated={!reduce}
                     />
                   </motion.g>
 
@@ -259,6 +311,29 @@ export function CommitGraph({
             })}
           </AnimatePresence>
 
+          {/*
+            HEAD が移った先で、輪が 1 回広がる。
+            key に移り先の id を入れてあるので、HEAD が動くたびに
+            古い輪が外れて新しい輪が生まれる ― それが、そのまま合図になる。
+          */}
+          <AnimatePresence>
+            {headAt && !reduce && (
+              <motion.circle
+                key={`head-ring:${headAt.id}`}
+                cx={headAt.cx}
+                cy={headAt.cy}
+                r={NODE_R + 2}
+                fill="none"
+                stroke="var(--head)"
+                strokeWidth={2.5}
+                initial={{ scale: 0.6, opacity: 0.95 }}
+                animate={{ scale: 2.8, opacity: 0 }}
+                transition={{ duration: 0.7, ease: 'easeOut' }}
+                style={{ transformOrigin: `${headAt.cx}px ${headAt.cy}px` }}
+              />
+            )}
+          </AnimatePresence>
+
           {/* 枝・タグ・HEAD のラベル。ref が別のコミットへ移ると、飛んでいくように見える */}
           <AnimatePresence>
             {labels.map((label) => {
@@ -267,16 +342,30 @@ export function CommitGraph({
               const offset = runningX.get(label.target) ?? 0;
               runningX.set(label.target, offset + badgeWidth(label.text) + 6);
               return (
+                /*
+                  縦と横で、ばねの硬さをわざと変えてある。
+                  横が遅れて追いつくので、まっすぐではなく**弧を描いて**飛ぶ。
+                  キーフレームで中間点を置く手もあるが、それだと
+                  「いまどこにいるか」を毎回自分で数えることになるので、こちらにした。
+                */
                 <motion.g
                   key={label.key}
                   data-ref={label.key}
                   data-ref-target={label.target}
-                  initial={reduce ? false : { opacity: 0, x: badgeX + offset + 10, y: p.cy }}
-                  animate={{ opacity: 1, x: badgeX + offset, y: p.cy }}
-                  exit={{ opacity: 0 }}
-                  transition={spring}
+                  initial={reduce ? false : { y: p.cy }}
+                  animate={{ y: p.cy }}
+                  transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 17 }}
                 >
-                  <RefBadge text={label.text} tone={label.tone} />
+                  <motion.g
+                    initial={reduce ? false : { opacity: 0, x: badgeX + offset + 26, scale: 0.7 }}
+                    animate={{ opacity: 1, x: badgeX + offset, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.7 }}
+                    transition={
+                      reduce ? { duration: 0 } : { type: 'spring', stiffness: 120, damping: 14 }
+                    }
+                  >
+                    <RefBadge text={label.text} tone={label.tone} />
+                  </motion.g>
                 </motion.g>
               );
             })}
@@ -310,6 +399,7 @@ function Node({
   isHead,
   isMerge,
   isOrphan,
+  animated,
 }: {
   theme: 'plain' | 'florist';
   cx: number;
@@ -318,6 +408,7 @@ function Node({
   isHead: boolean;
   isMerge: boolean;
   isOrphan: boolean;
+  animated: boolean;
 }) {
   const dash = isOrphan ? '3 2.5' : undefined;
 
@@ -325,8 +416,30 @@ function Node({
     return (
       <g data-bloom="true">
         {/* 八重咲き ＝ マージ。花弁を 2 層にして、線が 2 本入る先だと分かるようにする */}
-        {isMerge && <Petals cx={cx} cy={cy} r={NODE_R + 2.5} rotate={36} color={color} faint />}
-        <Petals cx={cx} cy={cy} r={NODE_R + 1.5} rotate={0} color={color} dash={dash} />
+        {isMerge && (
+          <Petals
+            cx={cx}
+            cy={cy}
+            r={NODE_R + 2.5}
+            rotate={36}
+            color={color}
+            faint
+            animated={animated}
+            scattered={isOrphan}
+            // 内側が開き切ってから外側。八重が「重なって」咲いて見える
+            delay={0.18}
+          />
+        )}
+        <Petals
+          cx={cx}
+          cy={cy}
+          r={NODE_R + 1.5}
+          rotate={0}
+          color={color}
+          dash={dash}
+          animated={animated}
+          scattered={isOrphan}
+        />
         <circle cx={cx} cy={cy} r={isHead ? 3.4 : 2.6} fill={color} />
       </g>
     );
@@ -353,6 +466,8 @@ function Node({
 }
 
 /** 花弁 5 枚。 */
+const PETAL_ANGLES = [0, 72, 144, 216, 288];
+
 function Petals({
   cx,
   cy,
@@ -361,6 +476,9 @@ function Petals({
   color,
   dash,
   faint,
+  animated,
+  scattered,
+  delay = 0,
 }: {
   cx: number;
   cy: number;
@@ -369,22 +487,45 @@ function Petals({
   color: string;
   dash?: string;
   faint?: boolean;
+  animated: boolean;
+  /** どの枝からも辿れなくなった花。花弁が外へ散る。 */
+  scattered?: boolean;
+  delay?: number;
 }) {
   return (
     <g opacity={faint ? 0.5 : 1}>
-      {[0, 72, 144, 216, 288].map((deg) => (
-        <ellipse
-          key={deg}
-          cx={cx}
-          cy={cy - r * 0.52}
-          rx={r * 0.38}
-          ry={r * 0.56}
-          transform={`rotate(${deg + rotate} ${cx} ${cy})`}
-          fill="var(--bg-elev)"
-          stroke={color}
-          strokeWidth={1.5}
-          strokeDasharray={dash}
-        />
+      {PETAL_ANGLES.map((deg, i) => (
+        /*
+          回転は外側の <g> に SVG の属性で持たせ、動きは内側だけに付ける。
+          こうすると内側では「上が外向き」になるので、
+          散るときの向きが花弁ごとに y の 1 本だけで書ける。
+        */
+        <g key={deg} transform={`rotate(${deg + rotate} ${cx} ${cy})`}>
+          <motion.ellipse
+            cx={cx}
+            cy={cy - r * 0.52}
+            rx={r * 0.38}
+            ry={r * 0.56}
+            fill="var(--bg-elev)"
+            stroke={color}
+            strokeWidth={1.5}
+            strokeDasharray={dash}
+            // 中心を軸に縮めておくと、開くときに「つぼみがほどける」ように見える
+            initial={animated ? { scale: 0, opacity: 0 } : false}
+            animate={{
+              scale: 1,
+              opacity: 1,
+              y: scattered ? -r * 0.9 : 0,
+              rotate: scattered ? 14 : 0,
+            }}
+            transition={
+              animated
+                ? { type: 'spring', stiffness: 320, damping: 13, delay: delay + i * 0.07 }
+                : { duration: 0 }
+            }
+            style={{ transformOrigin: `${cx}px ${cy}px` }}
+          />
+        </g>
       ))}
     </g>
   );

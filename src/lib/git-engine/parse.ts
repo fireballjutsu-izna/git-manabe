@@ -39,6 +39,7 @@ export const GIT_COMMANDS = [
   'revert',
   'stash',
   'reflog',
+  'tag',
   'remote',
   'push',
   'fetch',
@@ -55,7 +56,6 @@ export const HELPER_COMMANDS = ['touch', 'edit', 'teammate'] as const;
  * 打たれたときに「知らない」ではなく「まだ」と返すために持っておく。
  */
 export const PLANNED_COMMANDS = [
-  'tag',
   'diff',
   'restore',
   'rm',

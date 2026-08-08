@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 import {
   currentBranchName,
   headCommitId,
@@ -8,6 +10,32 @@ import {
   type RepoState,
 } from '@/lib/git-engine';
 import { useRepoStore } from '@/store/repo';
+
+interface Suggestion {
+  label: string;
+  line: string;
+  hint?: string;
+  /**
+   * now … いまの状態から見て、押して意味があるもの
+   * more … 打てはするが出番の無いもの。既定で畳む
+   *
+   * 全部並べていたら 12 個になり、肝心のものが埋もれていた。
+   * とくに reset --hard が常に見えているのは危うい ―
+   * シナリオの途中で押すと、そこまでの手順が消える。
+   */
+  tier: 'now' | 'more';
+  /**
+   * now のなかでの優先順。小さいほど前に出る。
+   *
+   * 枝が増えると now だけで 8 個 9 個になるので、上から 6 個で切る。
+   * どれを切るかを積んだ順まかせにすると、
+   * 「いちばん押してほしいもの」が落ちることがあるので、明示する。
+   */
+  weight: number;
+}
+
+/** 見出しの行に並べる上限。これを超えた now は、畳むほうへ回す。 */
+const NOW_LIMIT = 6;
 
 /** そのパスが、もう作業ディレクトリかステージか履歴のどこかにあるか。 */
 function used(state: RepoState, path: string): boolean {
@@ -23,6 +51,16 @@ function nextFile(state: RepoState): string {
   for (let n = 1; ; n += 1) {
     const path = `file-${n}.txt`;
     if (!used(state, path)) return path;
+  }
+}
+
+/** まだ使っていない v1.0, v1.1, …。同じ名前のタグは付けられないので、ずらす。 */
+function nextTag(state: RepoState): string {
+  for (let n = 0; ; n += 1) {
+    const name = `v1.${n}`;
+    if (!state.tags.some((t) => t.name === name) && !state.branches.some((b) => b.name === name)) {
+      return name;
+    }
   }
 }
 
@@ -45,36 +83,52 @@ function nextBranch(state: RepoState): string {
 export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?: string } }) {
   const state = useRepoStore((s) => s.history.present);
   const runLine = useRepoStore((s) => s.runLine);
+  const [showAll, setShowAll] = useState(false);
 
   const head = headCommitId(state);
   const branch = currentBranchName(state);
 
-  const suggestions: { label: string; line: string; hint?: string }[] = [];
+  const suggestions: Suggestion[] = [];
+  /** いま押して意味があるもの。weight を省くと真ん中の順。 */
+  const now = (s: Omit<Suggestion, 'tier' | 'weight'> & { weight?: number }): void => {
+    suggestions.push({ weight: 2, ...s, tier: 'now' });
+  };
+  /**
+   * 打てはするが、いまの状況では出番の無いもの。畳んでおく。
+   *
+   * weight は受け取るが使わない。同じ 1 か所で now と more を切り替える
+   * 書き方（`(条件 ? now : more)({...})`）があるので、形を揃えておく。
+   */
+  const more = (s: Omit<Suggestion, 'tier' | 'weight'> & { weight?: number }): void => {
+    suggestions.push({ ...s, tier: 'more', weight: 9 });
+  };
 
   if (!state.initialized) {
-    suggestions.push({ label: 'git init', line: 'git init', hint: 'ここから始まります' });
+    now({ label: 'git init', line: 'git init', hint: 'ここから始まります' });
   } else if (state.merging) {
     /*
      * マージが止まっている間は、通るコマンドだけを出す。
      * 押しても断られるボタンが並んでいると、詰まった人がさらに迷う。
      */
     for (const path of state.merging.conflicts) {
-      suggestions.push({
+      now({
         label: `git add ${path}`,
         line: `git add ${path}`,
         hint: '決着をつけた印',
+        weight: 0,
       });
     }
     if (state.merging.conflicts.length === 0) {
-      suggestions.push({ label: 'git commit', line: 'git commit', hint: 'マージを完了する' });
+      now({ label: 'git commit', line: 'git commit', hint: 'マージを完了する', weight: 0 });
     }
-    suggestions.push({
+    now({
       label: 'git merge --abort',
       line: 'git merge --abort',
       hint: '始める前に戻す',
+      weight: 1,
     });
-    suggestions.push({ label: 'git status', line: 'git status' });
-    suggestions.push({ label: 'git log', line: 'git log' });
+    now({ label: 'git status', line: 'git status', weight: 3 });
+    now({ label: 'git log', line: 'git log', weight: 4 });
   } else {
     /*
      * 課題が名前を指定しているなら、それを出す。
@@ -85,33 +139,37 @@ export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?
      * 個数から採番すると、file-1 も file-2 も無いのに file-3 が出ることがある。
      */
     const file = suggest?.file && !used(state, suggest.file) ? suggest.file : nextFile(state);
-    suggestions.push({ label: `touch ${file}`, line: `touch ${file}`, hint: '変更を 1 つ作る' });
+    now({ label: `touch ${file}`, line: `touch ${file}`, hint: '変更を 1 つ作る', weight: 1 });
 
     if (state.workingDir.length > 0) {
-      suggestions.push({ label: 'git add .', line: 'git add .', hint: 'ステージへ移す' });
+      now({ label: 'git add .', line: 'git add .', hint: 'ステージへ移す', weight: 0 });
     }
 
-    suggestions.push({
+    // ステージが空のときは「木を伸ばす」より先にやることがあるので、畳んでおく
+    (state.index.length > 0 ? now : more)({
       label: 'git commit',
       line: `git commit -m "${state.index.length > 0 ? 'ステージの変更' : 'コミット'}${
         Object.keys(state.commits).length + 1
       }"`,
       hint: '木を 1 つ伸ばす',
+      weight: 0,
     });
 
     if (head) {
       const wanted = suggest?.branch;
       const name =
         wanted && !state.branches.some((b) => b.name === wanted) ? wanted : nextBranch(state);
-      suggestions.push({
+      // 課題が名前を指定しているなら、それは「いま押すもの」
+      (suggest?.branch === name ? now : more)({
         label: `git branch ${name}`,
         line: `git branch ${name}`,
         hint: 'いまのコミットに名前を付ける',
+        weight: 1,
       });
 
       for (const b of state.branches) {
         if (b.name === branch) continue;
-        suggestions.push({ label: `git switch ${b.name}`, line: `git switch ${b.name}` });
+        now({ label: `git switch ${b.name}`, line: `git switch ${b.name}`, weight: 3 });
       }
 
       // 取り込むものが残っている枝だけをマージ候補に出す。
@@ -120,26 +178,27 @@ export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?
         for (const b of state.branches) {
           if (b.name === branch) continue;
           if (isAncestor(state, b.target, head)) continue;
-          suggestions.push({
+          now({
             label: `git merge ${b.name}`,
             line: `git merge ${b.name}`,
             hint: isAncestor(state, head, b.target) ? 'fast-forward' : '2 親のコミットができる',
+            weight: 2,
           });
         }
       }
 
       if (state.commits[head].parents.length > 0) {
-        suggestions.push({
+        more({
           label: 'git reset --soft HEAD~1',
           line: 'git reset --soft HEAD~1',
           hint: '中身はステージに残る',
         });
-        suggestions.push({
+        more({
           label: 'git reset --mixed HEAD~1',
           line: 'git reset --mixed HEAD~1',
           hint: '中身は未ステージに落ちる',
         });
-        suggestions.push({
+        more({
           label: 'git reset --hard HEAD~1',
           line: 'git reset --hard HEAD~1',
           hint: '中身は消える',
@@ -151,7 +210,7 @@ export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?
         for (const b of state.branches) {
           if (b.name === branch) continue;
           if (isAncestor(state, b.target, head)) continue;
-          suggestions.push({
+          more({
             label: `git rebase ${b.name}`,
             line: `git rebase ${b.name}`,
             hint: 'コピーし直す（id が変わる）',
@@ -159,21 +218,21 @@ export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?
         }
       }
 
-      suggestions.push({
+      more({
         label: 'git revert HEAD',
         line: 'git revert HEAD',
         hint: '打ち消すコミットを足す',
       });
 
       if (state.workingDir.length > 0 || state.index.length > 0) {
-        suggestions.push({ label: 'git stash', line: 'git stash', hint: '脇へどける' });
+        now({ label: 'git stash', line: 'git stash', hint: '脇へどける', weight: 3 });
       }
       if (state.stash.length > 0) {
-        suggestions.push({ label: 'git stash pop', line: 'git stash pop', hint: '戻す' });
+        now({ label: 'git stash pop', line: 'git stash pop', hint: '戻す', weight: 1 });
       }
 
       if (state.reflog.length > 0) {
-        suggestions.push({ label: 'git reflog', line: 'git reflog', hint: 'HEAD が通った道' });
+        more({ label: 'git reflog', line: 'git reflog', hint: 'HEAD が通った道' });
       }
 
       // どこからも辿れなくなったコミットがあるなら、拾い方をそのまま出す。
@@ -181,16 +240,17 @@ export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?
       const reachable = reachableCommits(state);
       const lostId = Object.keys(state.commits).find((id) => !reachable.has(id));
       if (lostId) {
-        suggestions.push({
+        now({
           label: `git switch -c 救出 ${lostId}`,
           line: `git switch -c 救出 ${lostId}`,
           hint: '辿れないコミットを拾う',
+          weight: 0,
         });
       }
 
       // リモート。登録 → push → 同僚が進める → fetch/pull、の順に出す
       if (state.remotes.length === 0) {
-        suggestions.push({
+        more({
           label: 'git remote add origin <url>',
           line: 'git remote add origin https://example.com/repo.git',
           hint: 'リモートを登録する',
@@ -201,61 +261,116 @@ export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?
         const known = state.remoteBranches.find((t) => t.name === `${remoteName}/${branch}`);
 
         if (!theirs) {
-          suggestions.push({
+          now({
             label: `git push ${remoteName} ${branch}`,
             line: `git push ${remoteName} ${branch}`,
             hint: '向こうへ送る',
+            weight: 1,
           });
         } else {
-          suggestions.push({ label: 'teammate 1', line: 'teammate 1', hint: '同僚が 1 つ進める' });
+          now({ label: 'teammate 1', line: 'teammate 1', hint: '同僚が 1 つ進める', weight: 3 });
           if (known?.target !== theirs.target) {
-            suggestions.push({
+            now({
               label: `git fetch ${remoteName}`,
               line: `git fetch ${remoteName}`,
               hint: '取ってくるだけ',
+              weight: 1,
             });
-            suggestions.push({
+            now({
               label: `git pull ${remoteName} ${branch}`,
               line: `git pull ${remoteName} ${branch}`,
               hint: '取ってきて取り込む',
+              weight: 1,
             });
           } else if (known.target !== head) {
-            suggestions.push({
+            now({
               label: `git push ${remoteName} ${branch}`,
               line: `git push ${remoteName} ${branch}`,
               hint: '向こうへ送る',
+              weight: 1,
             });
           }
         }
       }
 
       if (state.head.type === 'detached' && state.branches.length > 0) {
-        suggestions.push({
+        now({
           label: `git switch ${state.branches[0].name}`,
           line: `git switch ${state.branches[0].name}`,
           hint: '枝に戻る',
+          weight: 0,
         });
       }
     }
 
-    suggestions.push({ label: 'git status', line: 'git status' });
-    suggestions.push({ label: 'git log', line: 'git log' });
+    now({ label: 'git status', line: 'git status', weight: 4 });
+    more({ label: 'git log --oneline', line: 'git log --oneline', hint: '1 行ずつ短く' });
+    more({ label: 'git log --all', line: 'git log --all', hint: '辿れないものも出す' });
+    if (head) {
+      more({
+        label: `git tag ${nextTag(state)}`,
+        line: `git tag ${nextTag(state)}`,
+        hint: '動かない目印を付ける',
+      });
+    }
+    if (state.tags.length > 0) {
+      more({ label: 'git tag', line: 'git tag', hint: 'タグの一覧' });
+    }
   }
 
+  /*
+   * now を weight 順に並べ、上から 6 個までを表に出す。
+   * 溢れた分は捨てずに「ほかのコマンド」へ回す ― 押せなくなるわけではない。
+   * sort は安定なので、同じ weight どうしは積んだ順のまま。
+   */
+  const ranked = suggestions.filter((s) => s.tier === 'now').sort((a, b) => a.weight - b.weight);
+  const primary = ranked.slice(0, NOW_LIMIT);
+  const rest = [...ranked.slice(NOW_LIMIT), ...suggestions.filter((s) => s.tier === 'more')];
+
+  const Button = ({ s }: { s: Suggestion }) => (
+    <button
+      type="button"
+      onClick={() => runLine(s.line)}
+      title={s.hint ? `${s.line} — ${s.hint}` : s.line}
+      className="rounded border border-line bg-elev px-2.5 py-1.5 text-left font-mono text-xs text-fg hover:border-cyan-neon hover:bg-tint-cyan"
+    >
+      {s.label}
+      {s.hint && <span className="ml-2 font-sans text-[10px] text-muted">{s.hint}</span>}
+    </button>
+  );
+
   return (
-    <div className="flex flex-wrap gap-2">
-      {suggestions.map((s) => (
-        <button
-          key={s.label}
-          type="button"
-          onClick={() => runLine(s.line)}
-          title={s.hint ? `${s.line} — ${s.hint}` : s.line}
-          className="rounded border border-line bg-elev px-2.5 py-1.5 text-left font-mono text-xs text-fg hover:border-cyan-neon hover:bg-tint-cyan"
+    <div className="grid gap-2">
+      <div className="flex flex-wrap gap-2" data-buttons="now">
+        {primary.map((s) => (
+          <Button key={s.label} s={s} />
+        ))}
+
+        {rest.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            aria-expanded={showAll}
+            aria-controls="more-commands"
+            data-more-toggle=""
+            className="rounded border border-dashed border-line px-2.5 py-1.5 text-xs text-muted hover:border-line-lit hover:text-fg"
+          >
+            {showAll ? 'ほかのコマンドを閉じる' : `ほかのコマンド（${rest.length}）`}
+          </button>
+        )}
+      </div>
+
+      {showAll && rest.length > 0 && (
+        <div
+          id="more-commands"
+          data-buttons="more"
+          className="flex flex-wrap gap-2 rounded-card border border-line bg-inset px-3 py-2.5"
         >
-          {s.label}
-          {s.hint && <span className="ml-2 font-sans text-[10px] text-muted">{s.hint}</span>}
-        </button>
-      ))}
+          {rest.map((s) => (
+            <Button key={s.label} s={s} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
