@@ -133,7 +133,12 @@ export function CommitGraph({
   const runningX = new Map<string, number>();
 
   return (
-    <div className="rounded-card border border-line bg-sunken">
+    /*
+      min-w-0 が無いと、グリッドの子は min-width:auto のまま ―
+      中の SVG の幅にひきずられて、狭い画面で本文ごと横にはみ出す。
+      内側の overflow-auto だけでは止まらない。
+    */
+    <div className="min-w-0 rounded-card border border-line bg-sunken">
       {/* 履歴が伸びると縦に長くなる。新しいものが上なので、上端が見えていればよい */}
       <div className="max-h-[26rem] overflow-auto">
         <svg
@@ -195,12 +200,27 @@ export function CommitGraph({
                   exit={{ opacity: 0 }}
                   transition={spring}
                 >
+                  {/*
+                    出てくるときの動き。
+                      florist … つぼみが開くように、ひねりながら大きくなる
+                      plain   … ただ大きくなる
+                    どちらも迷子になった瞬間に傾く（florist は萎れて見える）。
+                    マージだけは、線が 2 本入り終わってから 1 度だけ脈打たせる
+                    ― 「2 つが 1 つに束ねられた」のが、静止画では伝わらないので。
+                  */}
                   <motion.g
                     initial={
-                      reduce ? false : { scale: 0.3, rotate: theme === 'florist' ? -40 : 0 }
+                      reduce ? false : { scale: 0.3, rotate: theme === 'florist' ? -50 : 0 }
                     }
-                    animate={{ scale: 1, rotate: isOrphan && theme === 'florist' ? 22 : 0 }}
-                    transition={spring}
+                    animate={{
+                      scale: isMerge && !reduce ? [1, 1.28, 1] : 1,
+                      rotate: isOrphan && theme === 'florist' ? 20 : 0,
+                    }}
+                    transition={
+                      isMerge && !reduce
+                        ? { scale: { duration: 0.5, times: [0, 0.45, 1], delay: 0.3 }, rotate: spring }
+                        : spring
+                    }
                     style={{ transformOrigin: `${p.cx}px ${p.cy}px` }}
                   >
                     <Node

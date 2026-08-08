@@ -189,7 +189,8 @@ function Runner({ scenario }: { scenario: Scenario }) {
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_286px]">
         <div className="grid min-w-0 gap-4">
-          <CommitGraph state={state} />
+          {/* シナリオだけ花で描く。レベルとサンドボックスは実物どおりのまま */}
+          <CommitGraph state={state} theme="florist" />
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <button
@@ -237,7 +238,12 @@ function Runner({ scenario }: { scenario: Scenario }) {
 
         <aside className="min-w-0">
           <h2 className="mb-2 text-xs font-bold tracking-wide text-accent">3 つの領域</h2>
-          <AreaPanes state={state} touched={lastResult?.touched ?? []} pulse={pulse} />
+          <AreaPanes
+            state={state}
+            touched={lastResult?.touched ?? []}
+            pulse={pulse}
+            theme="florist"
+          />
         </aside>
       </div>
     </div>

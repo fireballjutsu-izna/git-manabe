@@ -623,6 +623,48 @@ async function main(): Promise<void> {
       1,
     );
 
+    // ---- グラフの向きと、場面ごとの見た目 ----
+    // 縦になったので、狭い画面でもグラフのぶんだけ横へ広がることはない
+    const narrowGraph = await browser.newPage({ viewport: { width: 360, height: 780 } });
+    await narrowGraph.goto(`${BASE}/scenarios/hotfix/`, { waitUntil: 'networkidle' });
+    await narrowGraph.locator('#command-input').waitFor({ timeout: 15_000 });
+    await narrowGraph.waitForTimeout(500);
+    check(
+      '360px でもグラフが横へはみ出さない',
+      await narrowGraph.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+      ),
+      true,
+    );
+    await narrowGraph.close();
+
+    // シナリオは花、レベルとサンドボックスは実物どおり
+    check(
+      'シナリオのグラフは花で描かれる',
+      (await page.goto(`${BASE}/scenarios/clash/`, { waitUntil: 'networkidle' })) !== null &&
+        (await countEventually(page, '[data-bloom]', 4)) > 0,
+      true,
+    );
+    await page.goto(`${BASE}/levels/three-way/`, { waitUntil: 'networkidle' });
+    await page.locator('#command-input').waitFor({ timeout: 15_000 });
+    check('レベルのグラフは花にならない', await page.locator('[data-bloom]').count(), 0);
+    check('レベルでもグラフは出ている', await page.locator('[data-commit]').count(), 3);
+
+    // 新しいコミットが最上段に来る（縦にした狙いそのもの）
+    await page.locator('#command-input').fill('git commit -m 目印');
+    await page.locator('#command-input').press('Enter');
+    await page.waitForTimeout(500);
+    check(
+      '打ったばかりのコミットが最上段に出る',
+      await page.evaluate(() => {
+        const nodes = Array.from(document.querySelectorAll('[data-commit]'));
+        const tops = nodes.map((n) => n.getBoundingClientRect().top);
+        const newest = nodes.find((n) => (n.textContent ?? '').includes('目印'));
+        return newest !== undefined && newest.getBoundingClientRect().top === Math.min(...tops);
+      }),
+      true,
+    );
+
     check('コンソールにエラーが出ていない', consoleErrors, []);
 
     // アニメーションを減らす設定でも、中身は同じように出ること
