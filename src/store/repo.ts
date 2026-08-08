@@ -33,6 +33,8 @@ interface RepoStore {
   output: OutputLine[];
 
   runLine: (line: string) => CommandResult;
+  /** 与えられた状態から始め直す。レベルの開始状態を流し込むのに使う。 */
+  loadState: (state: RepoState, note: string) => void;
   undoStep: () => void;
   redoStep: () => void;
   resetAll: () => void;
@@ -77,6 +79,17 @@ export const useRepoStore = create<RepoStore>((set, get) => ({
     }));
 
     return result;
+  },
+
+  loadState: (state, note) => {
+    // undo でレベル開始前へ戻れてしまうと、そこから先が意味不明になる。
+    // 履歴ごと差し替える。
+    set({
+      history: initHistory(state),
+      lastResult: null,
+      pulse: 0,
+      output: [{ id: nextLineId(), kind: 'note', text: note }],
+    });
   },
 
   undoStep: () => {
