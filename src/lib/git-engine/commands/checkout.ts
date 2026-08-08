@@ -1,3 +1,4 @@
+import { copyTree, sameContent } from '../content';
 import { hasFlag, type ParsedCommand } from '../parse';
 import {
   currentBranchName,
@@ -5,19 +6,24 @@ import {
   findBranch,
   headCommitId,
   ok,
+  recomputeTracked,
   recordReflog,
   requireRepo,
   resolveRevision,
   setBranch,
   setHead,
+  treeOf,
 } from '../state';
-import type { CommandResult, RepoState } from '../types';
+import type { CommandResult, FileState, RepoState } from '../types';
 
 /**
  * `git checkout <branch|commit>` / `git switch <branch>`
  *
- * HEAD を動かすだけのコマンド。作業ディレクトリとステージには手を触れない
- * （このサイトはファイルの中身を持たないので、移動でぶつかることがない）。
+ * HEAD を動かし、作業ディレクトリとステージをその先の中身に入れ替える。
+ *
+ * 中身を持つようになったので、**移動でぶつかることがある** ―
+ * まだコミットしていない変更が、移動先で上書きされてしまうときは断る。
+ * 「switch する前に stash」が要る理由が、ここで手を動かして分かる。
  *
  * checkout と switch の違いも、そのまま再現する:
  *   checkout はコミットを直に指せて、その結果 detached HEAD になる
@@ -35,6 +41,11 @@ export function switchCommand(state: RepoState, command: ParsedCommand): Command
 function move(state: RepoState, command: ParsedCommand, as: 'checkout' | 'switch'): CommandResult {
   const blocked = requireRepo(state);
   if (blocked) return blocked;
+
+  // git checkout --ours <path> / --theirs <path> は、移動ではなく「片側を選ぶ」
+  if (hasFlag(command, '--ours', '--theirs')) {
+    return takeSide(state, command, hasFlag(command, '--ours') ? 'ours' : 'theirs');
+  }
 
   const creating = hasFlag(command, as === 'checkout' ? '-b' : '-c', '-B', '-C');
   const target = command.positional[0];
@@ -125,9 +136,13 @@ function createAndMove(
     );
   }
 
+  const blocked = wouldOverwrite(state, target);
+  if (blocked) return blocked;
+
   const withBranch = setBranch(state, name, target);
   const from = headCommitId(withBranch);
   let next = setHead(withBranch, { type: 'branch', ref: name });
+  next = carryOver(next, target);
   next = recordReflog(next, 'checkout', `${name} を作って移動`, from, target);
 
   return ok(
@@ -138,7 +153,7 @@ function createAndMove(
         ? ['どの枝からも辿れなくなっていたコミットも、こうして名前を付ければ拾い直せます。']
         : []),
     ],
-    ['repo', 'head'],
+    ['repo', 'head', 'workingDir', 'index'],
   );
 }
 
@@ -147,18 +162,23 @@ function moveToBranch(state: RepoState, name: string, target: string): CommandRe
     return ok(state, [`すでに ${name} の上にいます。`], []);
   }
 
+  const blocked = wouldOverwrite(state, target);
+  if (blocked) return blocked;
+
   const from = headCommitId(state);
   const wasDetached = state.head.type === 'detached';
 
   let next = setHead(state, { type: 'branch', ref: name });
+  next = carryOver(next, target);
   next = recordReflog(next, 'checkout', `${name} へ移動`, from, target);
 
   const lines = [`${name} へ移りました。`];
   if (wasDetached) {
     lines.push('detached HEAD から抜けました。HEAD はまた枝を指しています。');
   }
+  lines.push('作業ディレクトリの中身も、この枝のものに入れ替わっています。');
 
-  return ok(next, lines, ['head']);
+  return ok(next, lines, ['head', 'workingDir', 'index']);
 }
 
 function moveToCommit(state: RepoState, oid: string): CommandResult {
@@ -167,7 +187,11 @@ function moveToCommit(state: RepoState, oid: string): CommandResult {
     return ok(state, [`すでに ${oid} にいます。`], []);
   }
 
+  const blocked = wouldOverwrite(state, oid);
+  if (blocked) return blocked;
+
   let next = setHead(state, { type: 'detached', oid });
+  next = carryOver(next, oid);
   next = recordReflog(next, 'checkout', `${oid} へ移動（detached）`, from, oid);
 
   return ok(
@@ -177,6 +201,109 @@ function moveToCommit(state: RepoState, oid: string): CommandResult {
       'HEAD がどの枝も指していない状態です。ここでコミットしても、どの枝も伸びません。',
       '枝に戻るには git switch <枝の名前> を実行してください。',
     ],
-    ['head'],
+    ['head', 'workingDir', 'index'],
+  );
+}
+
+/**
+ * 移動すると消えてしまう変更があるなら、移動そのものを断る。
+ *
+ * 本物の Git と同じ判定 ― 手元で変えているファイルが、移動先で**別の中身**に
+ * なっているときだけ止める。移動先で同じ中身なら、変更を持ったまま移れる。
+ */
+function wouldOverwrite(state: RepoState, target: string): CommandResult | null {
+  const here = treeOf(state, headCommitId(state));
+  const there = treeOf(state, target);
+
+  const dirty = [...state.workingDir, ...state.index].map((f) => f.path);
+  const lost = [...new Set(dirty)].filter(
+    (path) => !sameContent(here[path], there[path]) && !sameContent(state.work[path], there[path]),
+  );
+
+  if (lost.length === 0) return null;
+
+  return fail(
+    state,
+    `${lost.join(', ')} の変更が、移動すると消えてしまいます。`,
+    'git stash で脇へどけるか、git add と git commit で先に片付けてください。',
+  );
+}
+
+/**
+ * 移動先の中身に入れ替える。
+ *
+ * 移動先が知らないファイル（untracked）と、
+ * 移動先でも同じ中身のファイルへの変更は、そのまま持っていく ― 本物と同じ。
+ */
+function carryOver(state: RepoState, target: string): RepoState {
+  const there = treeOf(state, target);
+  const work = copyTree(there);
+  const keep: FileState[] = [];
+
+  for (const f of [...state.workingDir, ...state.index]) {
+    // 移動先が知らないファイルだけを持ち越す。ステージには載せない
+    if (there[f.path] !== undefined) continue;
+    const mine = state.work[f.path] ?? state.stage[f.path];
+    if (!mine) continue;
+    work[f.path] = [...mine];
+    keep.push({ path: f.path, status: 'untracked' });
+  }
+
+  return {
+    ...state,
+    work,
+    stage: copyTree(there),
+    index: [],
+    workingDir: keep,
+    tracked: recomputeTracked(state, target),
+  };
+}
+
+/**
+ * `git checkout --ours <path>` / `--theirs <path>`
+ *
+ * ぶつかったファイルで、片側をまるごと選ぶ。
+ * 目印を手で消すより早く、「どちらを残すか」という判断だけに集中できる。
+ *
+ * これを打っただけでは決着したことにならない ― そのあとの git add が要る。
+ * 「Git に伝える」のはいつでも add だ、という筋を崩さないため。
+ */
+function takeSide(state: RepoState, command: ParsedCommand, side: 'ours' | 'theirs'): CommandResult {
+  const pausing = state.pausing;
+  if (!pausing) {
+    return fail(
+      state,
+      '--ours / --theirs は、ぶつかって止まっているときだけ使えます。',
+      'いまは何も止まっていません。',
+    );
+  }
+
+  const path = command.positional[0];
+  if (!path) {
+    return fail(state, 'どのファイルか書いてください。', `例: git checkout --${side} bouquet.txt`);
+  }
+
+  const conflict = pausing.conflicts.find((c) => c.path === path);
+  if (!conflict) {
+    const names = pausing.conflicts.map((c) => c.path);
+    return fail(
+      state,
+      `${path} はぶつかっていません。`,
+      names.length > 0 ? `決着待ちなのは ${names.join(', ')} です。` : 'ぶつかっているファイルはもうありません。',
+    );
+  }
+
+  const chosen = side === 'ours' ? conflict.ours : conflict.theirs;
+  const label = side === 'ours' ? 'こちら側' : `${pausing.from} 側`;
+
+  return ok(
+    { ...state, work: { ...state.work, [path]: [...chosen] } },
+    [
+      `${path} を ${label}の中身にしました。`,
+      ...chosen.map((line) => `  ${line}`),
+      '目印は消えました。ただし、これだけでは決着したことになりません。',
+      `git add ${path} を打つと、Git に「これで確定」と伝わります。`,
+    ],
+    ['workingDir'],
   );
 }

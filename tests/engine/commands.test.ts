@@ -135,10 +135,16 @@ describe('3 領域の行き来', () => {
     expect(state.workingDir).toEqual([{ path: 'a.txt', status: 'modified' }]);
   });
 
-  it('コミットしていないファイルは edit できない', () => {
-    expect(last(['git init', 'touch a.txt', 'edit a.txt']).error).toContain(
-      'まだ一度もコミットされていません',
-    );
+  it('作った直後のファイルも edit できる（untracked のまま）', () => {
+    // 中身を持つようになったので、コミット前でも書き換えられる。
+    // Git から見た状態は untracked のまま ― まだ一度も渡していないので
+    const state = play(['git init', 'touch a.txt', 'edit a.txt 春の花']);
+    expect(state.workingDir).toEqual([{ path: 'a.txt', status: 'untracked' }]);
+    expect(state.work['a.txt'][0]).toBe('春の花');
+  });
+
+  it('無いファイルは edit できない', () => {
+    expect(last(['git init', 'edit a.txt']).error).toContain('まだ一度もコミットされていません');
   });
 
   it('同じ名前の touch は断る', () => {
@@ -289,7 +295,8 @@ describe('git switch / checkout', () => {
     const result = run(base, `git checkout ${root.id}`);
     expect(result.error).toBeUndefined();
     expect(result.state.head).toEqual({ type: 'detached', oid: root.id });
-    expect(result.touched).toEqual(['head']);
+    // 中身も戻すので、3 領域も書き換わる
+    expect(result.touched).toEqual(['head', 'workingDir', 'index']);
     expect(result.log.join('\n')).toContain('detached HEAD');
   });
 

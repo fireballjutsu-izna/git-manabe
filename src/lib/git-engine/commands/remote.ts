@@ -1,3 +1,4 @@
+import { defaultContent } from '../content';
 import type { ParsedCommand } from '../parse';
 import {
   aheadBehind,
@@ -142,13 +143,18 @@ export function teammate(state: RepoState, command: ParsedCommand): CommandResul
   for (let i = 0; i < count; i += 1) {
     const seq = next.seq + 1;
     const id = nextCommitId(next);
+    const path = `teammate-${seq}.txt`;
+    // 向こうの tree は、親の tree にファイルを 1 つ足したもの。
+    // fetch でこちらへ来たあと merge すると、ここが本物の中身として効いてくる
+    const parentTree = next.remotes.find((r) => r.name === target.name)?.commits[parent]?.tree ?? {};
     const commit: Commit = {
       id,
       parents: [parent],
       message: `同僚の変更 ${i + 1}`,
       author: '同僚',
       createdAt: seq,
-      paths: [`teammate-${seq}.txt`],
+      tree: { ...parentTree, [path]: defaultContent(path) },
+      paths: [path],
     };
     parent = id;
 

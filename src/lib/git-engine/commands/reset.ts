@@ -1,3 +1,4 @@
+import { copyTree } from '../content';
 import { hasFlag, type ParsedCommand } from '../parse';
 import {
   commitsBetween,
@@ -12,8 +13,9 @@ import {
   resolveRevision,
   setBranch,
   setHead,
+  treeOf,
 } from '../state';
-import type { Area, CommandResult, FileState, RepoState } from '../types';
+import type { Area, CommandResult, FileState, RepoState, Tree } from '../types';
 
 type Mode = 'soft' | 'mixed' | 'hard';
 
@@ -75,8 +77,9 @@ export function reset(state: RepoState, command: ParsedCommand): CommandResult {
   const tracked = recomputeTracked(next, target);
 
   const { index, workingDir, touched, note } = applyMode(mode, next, droppedPaths, tracked);
+  const { work, stage } = applyContent(mode, next, target);
 
-  next = { ...next, index, workingDir, tracked };
+  next = { ...next, index, workingDir, work, stage, tracked };
   next = recordReflog(next, `reset --${mode}`, `${spec} へ戻す`, head, target);
 
   const lines = [
@@ -104,6 +107,26 @@ function pickMode(command: ParsedCommand): Mode | 'conflict' {
   if (hasFlag(command, '--hard')) chosen.push('hard');
   if (chosen.length > 1) return 'conflict';
   return chosen[0] ?? 'mixed';
+}
+
+/**
+ * 中身のほうを、モードに応じて入れ替える。
+ *
+ *   --soft   どちらも触らない（取り消したぶんはステージに残ったまま）
+ *   --mixed  ステージだけ戻す（手元のファイルは変えない）
+ *   --hard   両方まるごと戻す ― これが「消える」の正体
+ *
+ * 領域の表と、まったく同じ形になっているのが要点。
+ */
+function applyContent(
+  mode: Mode,
+  state: RepoState,
+  target: string,
+): { work: Tree; stage: Tree } {
+  const there = treeOf(state, target);
+  if (mode === 'soft') return { work: state.work, stage: state.stage };
+  if (mode === 'mixed') return { work: state.work, stage: copyTree(there) };
+  return { work: copyTree(there), stage: copyTree(there) };
 }
 
 /** 枝の上なら枝ごと動かし、detached なら HEAD だけ動かす。 */

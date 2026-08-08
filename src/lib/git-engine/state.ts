@@ -1,3 +1,4 @@
+import { changedPaths, copyTree } from './content';
 import type {
   Area,
   Commit,
@@ -7,6 +8,7 @@ import type {
   Ref,
   Remote,
   RepoState,
+  Tree,
 } from './types';
 
 /** `git init` の前の状態。サンドボックスはここから始まる。 */
@@ -19,15 +21,32 @@ export function emptyState(): RepoState {
     head: { type: 'branch', ref: 'main' },
     index: [],
     workingDir: [],
+    work: {},
+    stage: {},
     tracked: [],
     stash: [],
     remotes: [],
     remoteBranches: [],
-    merging: null,
+    pausing: null,
     reflog: [],
     seq: 0,
   };
 }
+
+/* ---- tree（ある時点の全ファイル）---- */
+
+/** そのコミットの tree。null（unborn）なら空。 */
+export function treeOf(state: RepoState, id: string | null): Tree {
+  if (!id) return {};
+  return state.commits[id]?.tree ?? {};
+}
+
+/** HEAD の tree。 */
+export function headTree(state: RepoState): Tree {
+  return treeOf(state, headCommitId(state));
+}
+
+export { copyTree };
 
 /**
  * コミット id を作る。
@@ -245,6 +264,13 @@ export function commitsBetween(state: RepoState, to: string | null, from: string
   return [...ancestorsOf(state, from)].filter((id) => !keep.has(id));
 }
 
+/** そのコミットが第一親から変えたパス。tree の差から導く。 */
+export function pathsOf(state: RepoState, id: string): string[] {
+  const commit = state.commits[id];
+  if (!commit) return [];
+  return changedPaths(treeOf(state, commit.parents[0] ?? null), commit.tree);
+}
+
 /** そのコミット群が記録したパスを、重複なく集める。 */
 export function pathsIn(state: RepoState, ids: string[]): string[] {
   const paths = new Set<string>();
@@ -289,18 +315,28 @@ export function recomputeTracked(state: RepoState, head: string | null): string[
   return pathsIn(state, [...ancestorsOf(state, head)]).sort();
 }
 
-/** 新しいコミットを 1 つ足した状態を返す。HEAD は動かさない（呼び出し側の責任）。 */
+/**
+ * 新しいコミットを 1 つ足した状態を返す。HEAD は動かさない（呼び出し側の責任）。
+ *
+ * paths は受け取らず、**第一親の tree との差から必ず計算する**。
+ * 呼び出し側に任せると、tree と paths がずれた状態を作れてしまう。
+ */
 export function addCommit(
   state: RepoState,
-  commit: Omit<Commit, 'createdAt'> & { createdAt?: number },
+  commit: Omit<Commit, 'createdAt' | 'paths'> & { createdAt?: number },
 ): RepoState {
   const seq = state.seq + 1;
+  const parentTree = treeOf(state, commit.parents[0] ?? null);
   return {
     ...state,
     seq,
     commits: {
       ...state.commits,
-      [commit.id]: { ...commit, createdAt: commit.createdAt ?? seq },
+      [commit.id]: {
+        ...commit,
+        createdAt: commit.createdAt ?? seq,
+        paths: changedPaths(parentTree, commit.tree),
+      },
     },
   };
 }
@@ -353,6 +389,16 @@ export function setIndex(state: RepoState, files: FileState[]): RepoState {
   return { ...state, index: files };
 }
 
+/**
+ * 3 領域を tree に合わせて作り直す。
+ *
+ * checkout・reset --hard・stash が使う ―「そのコミットそのままの状態」に戻すのは、
+ * ファイルの中身まで含めて入れ替えることだから。
+ */
+export function loadTree(state: RepoState, tree: Tree): RepoState {
+  return { ...state, work: copyTree(tree), stage: copyTree(tree), index: [], workingDir: [] };
+}
+
 /** そのパスを Git が知っている（一度でもコミットされた）か。 */
 export function isTracked(state: RepoState, path: string): boolean {
   return state.tracked.includes(path);
@@ -378,13 +424,30 @@ export function fail(state: RepoState, error: string, hint?: string): CommandRes
   return { state, log: hint ? [error, hint] : [error], error, touched: [] };
 }
 
-/** マージの途中では打てないコマンドの、共通の断り文句。 */
-export function requireNoMerge(state: RepoState): CommandResult | null {
-  if (!state.merging) return null;
+/** 止まっている作業の、続け方とやめ方。断り文句にも案内にも使う。 */
+export function pausingWays(kind: 'merge' | 'rebase' | 'cherry-pick'): {
+  label: string;
+  next: string;
+  abort: string;
+} {
+  if (kind === 'merge') {
+    return { label: 'マージ', next: 'git commit', abort: 'git merge --abort' };
+  }
+  if (kind === 'rebase') {
+    return { label: 'rebase', next: 'git rebase --continue', abort: 'git rebase --abort' };
+  }
+  return { label: 'cherry-pick', next: 'git cherry-pick --continue', abort: 'git cherry-pick --abort' };
+}
+
+/** 止まっている間は打てないコマンドの、共通の断り文句。 */
+export function requireNoPause(state: RepoState): CommandResult | null {
+  const pausing = state.pausing;
+  if (!pausing) return null;
+  const ways = pausingWays(pausing.kind);
   return fail(
     state,
-    'マージの途中です。先に決着をつけてください。',
-    'ぶつかったファイルを git add してから git commit するか、git merge --abort でやめられます。',
+    `${ways.label}の途中です。先に決着をつけてください。`,
+    `ぶつかったファイルを git add してから ${ways.next} か、${ways.abort} でやめられます。`,
   );
 }
 

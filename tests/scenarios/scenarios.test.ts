@@ -28,13 +28,17 @@ const SOLUTIONS: Record<string, string[][]> = {
   ],
   behind: [['git fetch origin'], ['git merge origin/main'], ['git push origin main']],
   'wrong-branch': [['git branch winter'], ['git reset --hard HEAD~1'], ['git switch winter']],
-  clash: [['git merge spring'], ['git add vase.txt'], ['git commit']],
+  clash: [
+    ['git merge spring'],
+    ['git checkout --theirs vase.txt'],
+    ['git add vase.txt'],
+    ['git commit'],
+  ],
   showcase: [
     // cherry-pick の id は状態から引くので、ここでは印だけ置く
     ['<cherry-pick:傷んだ葉を直した>'],
     ['git push origin main'],
     ['git merge workshop'],
-    ['git add leaf.txt', 'git commit'],
     ['git push origin main'],
   ],
 };

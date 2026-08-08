@@ -1,21 +1,25 @@
-import type { ParsedCommand } from '../parse';
+import { applyOnto, pauseWith, restore, snapshot } from '../apply';
+import { hasFlag, type ParsedCommand } from '../parse';
 import {
   addCommit,
   currentBranchName,
   fail,
   headCommitId,
   isAncestor,
+  loadTree,
   mergeBase,
   nextCommitId,
   ok,
+  pausingWays,
   recomputeTracked,
   recordReflog,
   requireRepo,
   resolveRevision,
   setBranch,
   setHead,
+  treeOf,
 } from '../state';
-import type { Commit, CommandResult, RepoState } from '../types';
+import type { Commit, CommandResult, Pausing, RepoState } from '../types';
 
 /**
  * `git rebase <upstream>`
@@ -28,10 +32,25 @@ import type { Commit, CommandResult, RepoState } from '../types';
  *
  * コピー元は消えない。ただ、どの枝からも指されなくなるだけ。
  * グラフではそれを薄く描くので、「作り直された」ことが目で分かる。
+ *
+ * そして rebase は**途中で止まる**。1 つずつ当て直すので、
+ * ぶつかるたびに手が止まり、そのつど --continue で進める ―
+ * 実務でいちばん痛いのがこれで、merge の 1 回で済む止まり方とは体感が違う。
  */
 export function rebase(state: RepoState, command: ParsedCommand): CommandResult {
   const blocked = requireRepo(state);
   if (blocked) return blocked;
+
+  if (hasFlag(command, '--abort')) return abort(state);
+  if (hasFlag(command, '--continue')) return proceed(state);
+
+  if (state.pausing) {
+    return fail(
+      state,
+      `${pausingWays(state.pausing.kind).label}の途中です。もう 1 つ始めることはできません。`,
+      'git rebase --continue で続けるか、git rebase --abort でやめてください。',
+    );
+  }
 
   const spec = command.positional[0];
   if (!spec) {
@@ -67,10 +86,10 @@ export function rebase(state: RepoState, command: ParsedCommand): CommandResult 
   if (isAncestor(state, head, onto)) return fastForward(state, spec, onto, head);
 
   const base = mergeBase(state, head, onto);
-  const replay = chainToReplay(state, head, base);
+  const chain = chainToReplay(state, head, base);
 
-  const merges = replay.filter((c) => c.parents.length > 1);
-  const plain = replay.filter((c) => c.parents.length === 1);
+  const merges = chain.filter((c) => c.parents.length > 1);
+  const plain = chain.filter((c) => c.parents.length === 1);
 
   if (plain.length === 0) {
     return fail(
@@ -82,7 +101,10 @@ export function rebase(state: RepoState, command: ParsedCommand): CommandResult 
     );
   }
 
-  return replayOnto(state, spec, onto, head, plain, merges.length);
+  const saved = snapshot(state);
+  // 置き直しは「積む先へいったん移ってから、1 つずつ当てる」
+  const moved = moveTo(state, onto);
+  return replay(moved, spec, plain.map((c) => c.id), [], saved, head, merges.length);
 }
 
 /**
@@ -107,8 +129,8 @@ function fastForward(
   onto: string,
   from: string,
 ): CommandResult {
-  const branch = currentBranchName(state);
-  let next = branch ? setBranch(state, branch, onto) : setHead(state, { type: 'detached', oid: onto });
+  let next = moveTo(state, onto);
+  next = loadTree(next, treeOf(next, onto));
   next = { ...next, tracked: recomputeTracked(next, onto) };
   next = recordReflog(next, 'rebase', `${spec} へ fast-forward`, from, onto);
 
@@ -118,45 +140,79 @@ function fastForward(
       `${spec} の上へ進みました（${onto}）。`,
       '分かれていなかったので、コピーは起きていません。id はそのままです。',
     ],
-    ['repo', 'head'],
+    ['repo', 'head', 'workingDir', 'index'],
   );
 }
 
-function replayOnto(
+/** 枝の上なら枝ごと、detached なら HEAD だけを動かす。 */
+function moveTo(state: RepoState, id: string): RepoState {
+  const branch = currentBranchName(state);
+  return branch ? setBranch(state, branch, id) : setHead(state, { type: 'detached', oid: id });
+}
+
+/** 残りを 1 つずつ当て直す。ぶつかったらそこで止まる。 */
+function replay(
   state: RepoState,
   spec: string,
-  onto: string,
+  remaining: string[],
+  done: { before: string; after: string }[],
+  saved: Pausing['saved'],
   from: string,
-  replay: Commit[],
   skippedMerges: number,
 ): CommandResult {
   let next = state;
-  let parent = onto;
-  const pairs: { before: string; after: string }[] = [];
+  let parent = headCommitId(next) as string;
+  const pairs = [...done];
 
-  for (const original of replay) {
+  for (let i = 0; i < remaining.length; i += 1) {
+    const target = remaining[i];
+    const original = next.commits[target];
+
+    const applied = applyOnto(
+      next,
+      original.parents[0] ?? null,
+      parent,
+      target,
+      '積む先',
+      original.message,
+    );
+
+    if (applied.conflicts.length > 0) {
+      return pauseWith(
+        next,
+        {
+          kind: 'rebase',
+          from: original.message,
+          theirs: target,
+          base: original.parents[0] ?? null,
+          conflicts: applied.conflicts,
+          saved,
+          remaining: remaining.slice(i),
+          done: pairs,
+        },
+        applied.tree,
+      );
+    }
+
     const id = nextCommitId(next);
     next = addCommit(next, {
       id,
       parents: [parent],
       message: original.message,
       author: original.author,
-      // 中身は同じ。変わるのは「どの上に乗っているか」と、その結果としての id
-      paths: [...original.paths],
+      tree: applied.tree,
     });
-    pairs.push({ before: original.id, after: id });
+    pairs.push({ before: target, after: id });
     parent = id;
+    next = moveTo(next, parent);
   }
 
-  const branch = currentBranchName(next);
-  next = branch
-    ? setBranch(next, branch, parent)
-    : setHead(next, { type: 'detached', oid: parent });
-  next = { ...next, tracked: recomputeTracked(next, parent) };
+  next = loadTree(next, next.commits[parent].tree);
+  next = { ...next, tracked: recomputeTracked(next, parent), pausing: null };
   next = recordReflog(next, 'rebase', `${spec} の上へ置き直す`, from, parent);
 
   const lines = [
-    `${replay.length} 件を ${spec} の上へ置き直しました。`,
+    `${pairs.length} 件を ${spec} の上へ置き直しました。`,
     ...pairs.map((p) => `  ${p.before} → ${p.after}  ${next.commits[p.after].message}`),
     '中身は同じでも、id が変わっています。別のコミットとして作り直されたからです。',
     'コピー元は消えていません。どの枝からも指されなくなっただけで、グラフには薄く残ります。',
@@ -167,5 +223,102 @@ function replayOnto(
     );
   }
 
-  return ok(next, lines, ['repo', 'head']);
+  return ok(next, lines, ['repo', 'head', 'workingDir', 'index']);
+}
+
+/**
+ * `git rebase --continue`
+ *
+ * 止まっていた 1 件を、いまのステージの中身でコミットしてから、残りを続ける。
+ * 何件も残っていれば、また次でぶつかって止まる ―
+ * これが「rebase は 1 回で終わらないことがある」の正体。
+ */
+function proceed(state: RepoState): CommandResult {
+  const pausing = state.pausing;
+  if (!pausing) return fail(state, 'いま rebase の途中ではありません。');
+  if (pausing.kind !== 'rebase') {
+    return fail(
+      state,
+      `いま止まっているのは${pausingWays(pausing.kind).label}です。`,
+      pausing.kind === 'merge'
+        ? '続けるなら git commit です。'
+        : `続けるなら git ${pausing.kind} --continue です。`,
+    );
+  }
+  if (pausing.conflicts.length > 0) {
+    return fail(
+      state,
+      `まだ決着のついていないファイルがあります: ${pausing.conflicts.map((c) => c.path).join(', ')}`,
+      '直したファイルを git add してください。やめるなら git rebase --abort です。',
+    );
+  }
+
+  const target = pausing.remaining[0];
+  const original = state.commits[target];
+  const parent = headCommitId(state) as string;
+  const id = nextCommitId(state);
+
+  let next = addCommit(state, {
+    id,
+    parents: [parent],
+    message: original.message,
+    author: original.author,
+    tree: state.stage,
+  });
+  next = moveTo(next, id);
+
+  const done = [...pausing.done, { before: target, after: id }];
+  const rest = pausing.remaining.slice(1);
+
+  const resumed = replay(
+    { ...next, pausing: null },
+    '元の場所',
+    rest,
+    done,
+    pausing.saved,
+    pausing.saved.branchTarget ?? parent,
+    0,
+  );
+
+  return {
+    ...resumed,
+    log: [
+      `${target} の決着を ${id} として記録しました。`,
+      ...(rest.length > 0 ? [`残り ${rest.length} 件を続けます。`] : []),
+      ...resumed.log,
+    ],
+  };
+}
+
+/**
+ * `git rebase --abort`
+ *
+ * 置き直しをまるごとやめて、始める前に戻す。
+ * 途中まで作ったコピーは、どの枝からも指されない場所に残る ―
+ * 「やめても壊れない」ことが分かると、rebase は怖くなくなる。
+ */
+function abort(state: RepoState): CommandResult {
+  const pausing = state.pausing;
+  if (!pausing) return fail(state, 'いま rebase の途中ではありません。');
+  if (pausing.kind !== 'rebase') {
+    return fail(
+      state,
+      `いま止まっているのは${pausingWays(pausing.kind).label}です。`,
+      pausing.kind === 'merge'
+        ? 'やめるなら git merge --abort です。'
+        : `やめるなら git ${pausing.kind} --abort です。`,
+    );
+  }
+
+  return ok(
+    restore(state, pausing),
+    [
+      'rebase をやめました。枝は置き直す前の場所に戻っています。',
+      pausing.done.length > 0
+        ? `途中まで作った ${pausing.done.length} 件のコピーは、どの枝からも辿れない場所に残ります（消えてはいません）。`
+        : 'コミットは 1 つも増えていません。',
+      'ファイルの中身も戻っているので、書き込まれた目印は残っていません。',
+    ],
+    ['repo', 'head', 'workingDir', 'index'],
+  );
 }

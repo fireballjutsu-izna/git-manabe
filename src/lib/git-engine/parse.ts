@@ -46,6 +46,7 @@ export const GIT_COMMANDS = [
   'pull',
   'status',
   'log',
+  'diff',
 ] as const;
 
 /** Git のコマンドではないが、サンドボックスの中でだけ使える補助コマンド。 */
@@ -56,7 +57,6 @@ export const HELPER_COMMANDS = ['touch', 'edit', 'teammate'] as const;
  * 打たれたときに「知らない」ではなく「まだ」と返すために持っておく。
  */
 export const PLANNED_COMMANDS = [
-  'diff',
   'restore',
   'rm',
   'mv',
