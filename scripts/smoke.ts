@@ -347,6 +347,58 @@ async function main(): Promise<void> {
       await page.locator('[data-ref="remote:origin/main"]').getAttribute('data-ref-target'),
     );
 
+    // ---- レベル ----
+    // 一覧 → 1 つ解く → クリア記録が残り、一覧に反映される、まで通す
+    await page.goto(`${BASE}/levels/`, { waitUntil: 'networkidle' });
+    check('レベルが 12 個並ぶ', await page.locator('[data-level]').count(), 12);
+    check(
+      '最初はどれもクリアしていない',
+      await page.locator('[data-level][data-cleared]').count(),
+      0,
+    );
+
+    await page.goto(`${BASE}/levels/areas/`, { waitUntil: 'networkidle' });
+    await page.locator('textarea.xterm-helper-textarea').waitFor({ timeout: 15_000 });
+    check('やることが出ている', await page.locator('[data-testid="task"]').count(), 1);
+    check('まだクリアしていない', await page.locator('[data-testid="cleared"]').count(), 0);
+
+    await type(page, 'touch hello.txt');
+    await type(page, 'git add .');
+    await type(page, 'git commit -m はじめ');
+    check(
+      '解くとクリア表示が出る',
+      await countEventually(page, '[data-testid="cleared"]', 1),
+      1,
+    );
+
+    // 記録が localStorage に残り、一覧に反映されること
+    await page.goto(`${BASE}/levels/`, { waitUntil: 'networkidle' });
+    check(
+      'クリアが一覧に反映される',
+      await countEventually(page, '[data-level][data-cleared]', 1),
+      1,
+    );
+    check(
+      '連続日数が 1 になる',
+      await page.locator('[data-testid="progress"]').getByText('1', { exact: true }).count(),
+      2,
+    );
+
+    // ヒントは押すまで出ない
+    await page.goto(`${BASE}/levels/rebase/`, { waitUntil: 'networkidle' });
+    await page.locator('textarea.xterm-helper-textarea').waitFor({ timeout: 15_000 });
+    check(
+      'ヒントは最初は隠れている',
+      await page.getByText('git rebase main です。').count(),
+      0,
+    );
+    await page.getByRole('button', { name: /ヒントを見る/ }).click();
+    check(
+      '押すと 1 つ目だけ出る',
+      await countEventually(page, 'text=git rebase main です。', 1),
+      1,
+    );
+
     check('コンソールにエラーが出ていない', consoleErrors, []);
 
     // アニメーションを減らす設定でも、中身は同じように出ること

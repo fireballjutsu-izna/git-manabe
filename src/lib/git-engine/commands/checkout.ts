@@ -7,7 +7,6 @@ import {
   ok,
   recordReflog,
   requireRepo,
-  resolveCommit,
   resolveRevision,
   setBranch,
   setHead,
@@ -55,9 +54,11 @@ function move(state: RepoState, command: ParsedCommand, as: 'checkout' | 'switch
   const branch = findBranch(state, target);
   if (branch) return moveToBranch(state, target, branch.target);
 
-  // 枝ではないので、コミットの直接指定として読む
+  // 枝ではないので、コミットの指定として読む。
+  // id そのものだけでなく HEAD~1 や origin/main も受ける
+  // ― detached HEAD に入るいちばん普通の書き方が git checkout HEAD~1 なので。
   const detachAllowed = as === 'checkout' || hasFlag(command, '--detach');
-  const resolved = resolveCommit(state, target);
+  const resolved = resolveRevision(state, target);
 
   if (resolved === 'ambiguous') {
     return fail(

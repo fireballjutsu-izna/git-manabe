@@ -20,14 +20,24 @@ export default function HomePage() {
         壊しても本物のリポジトリには何も起きません。
       </p>
 
-      <div className="mt-8">
+      <div className="mt-8 flex flex-wrap gap-3">
         <Link
-          href="/sandbox"
+          href="/levels"
           className="inline-block rounded-card border border-line-lit bg-tint-cyan px-5 py-2.5 font-bold text-fg no-underline hover:border-cyan-neon"
         >
-          サンドボックスを開く →
+          レベルを始める →
+        </Link>
+        <Link
+          href="/sandbox"
+          className="inline-block rounded-card border border-line px-5 py-2.5 text-muted no-underline hover:border-line-lit hover:text-fg"
+        >
+          自由に触る（サンドボックス）
         </Link>
       </div>
+      <p className="mt-3 text-xs text-muted">
+        レベルは 12 個。1 つにつき概念 1 つで、状況はこちらで用意します。
+        クリアの記録と連続日数は、この端末の中だけに残ります。
+      </p>
 
       <section className="mt-14">
         <h2 className="border-b border-line pb-2 text-lg font-bold text-accent">いま触れるもの</h2>

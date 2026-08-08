@@ -40,6 +40,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
             <nav className="ml-auto flex items-center gap-1 text-sm">
               <Link
+                href="/levels"
+                className="rounded px-2.5 py-1.5 text-muted no-underline hover:bg-inset hover:text-fg"
+              >
+                レベル
+              </Link>
+              <Link
                 href="/sandbox"
                 className="rounded px-2.5 py-1.5 text-muted no-underline hover:bg-inset hover:text-fg"
               >
