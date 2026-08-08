@@ -114,9 +114,6 @@ describe.each(SCENARIOS.map((s) => [s.id, s] as const))('シナリオ %s', (id, 
       state = after;
 
       expect(step.check(state), `${label}: 模範解答で満たせません`).toBe(true);
-
-      // 次のステップへ渡す前に、演出のコマンドを流す
-      if (step.after) state = playCommands(step.after, state);
     }
   });
 

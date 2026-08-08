@@ -51,6 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 { href: '/start', label: 'はじめに' },
                 { href: '/docs', label: '記事' },
                 { href: '/levels', label: 'レベル' },
+                { href: '/scenarios', label: 'シナリオ' },
                 { href: '/sandbox', label: 'サンドボックス' },
               ].map((item) => (
                 <Link prefetch={false}

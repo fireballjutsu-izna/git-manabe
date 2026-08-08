@@ -32,13 +32,6 @@ export interface ScenarioStep {
   hints: string[];
   /** 模範解答の手数。星の基準で、テストで実測と突き合わせる。 */
   par: number;
-  /**
-   * このステップを満たしたあとに、黙って流すコマンド。
-   *
-   * 「同僚が本店へ送った」「店長が店頭を直した」のように、
-   * **向こう側が動く**のを表すのに使う。engine に手を入れずに済む。
-   */
-  after?: string[];
   /** コマンドボタンに出す名前。課題文と食い違わせないために書き写す。 */
   suggest?: { file?: string; branch?: string };
 }

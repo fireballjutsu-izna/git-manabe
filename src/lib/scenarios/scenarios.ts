@@ -359,7 +359,7 @@ export const SCENARIOS: Scenario[] = [
           on(s, 'main') && tipMessage(s, 'main') === '傷んだ葉を直した' && depth(s, 'main') === 2,
         hints: [
           '枝ごと引っ越すのではなく、1 つだけ摘んでくるコマンドがあります。',
-          'グラフから id を読むか、git switch workshop で git log を見て確かめてください。',
+          'workshop のコミットもグラフに描かれています。「傷んだ葉を直した」の下にある id を読んでください（枝を移る必要はありません）。',
           'git cherry-pick <id> です。「試作2」まで持ってこないよう、1 つだけ指定します。',
         ],
         par: 1,

@@ -555,6 +555,74 @@ async function main(): Promise<void> {
       1,
     );
 
+    // ---- シナリオ ----
+    await page.goto(`${BASE}/scenarios/`, { waitUntil: 'networkidle' });
+    check('シナリオが 6 本並ぶ', await page.locator('[data-scenario]').count(), 6);
+    check(
+      '最初はどれも片付いていない',
+      await page.locator('[data-scenario][data-done]').count(),
+      0,
+    );
+
+    // 1 本を通しで解く。依頼が順に届き、最後に星が付くところまで
+    await page.goto(`${BASE}/scenarios/hotfix/`, { waitUntil: 'networkidle' });
+    await page.locator('#command-input').waitFor({ timeout: 15_000 });
+    check('最初は依頼が 1 件だけ届いている', await page.locator('[data-step]').count(), 1);
+
+    const field2 = page.locator('#command-input');
+    const send = async (line: string) => {
+      await field2.fill(line);
+      await field2.press('Enter');
+      await page.waitForTimeout(280);
+    };
+
+    await send('git stash');
+    check('1 つ満たすと次の依頼が届く', await countEventually(page, '[data-step]', 2), 2);
+    check('済んだ依頼は残る', await page.locator('[data-step][data-done]').count(), 1);
+
+    for (const line of [
+      'git switch main',
+      'git switch -c hotfix',
+      'edit bouquet.txt',
+      'git add bouquet.txt',
+      'git commit -m 差し替えた',
+      'git switch main',
+      'git merge hotfix',
+      'git switch new-design',
+      'git stash pop',
+    ]) {
+      await send(line);
+    }
+
+    check('最後まで解くと完了が出る', await countEventually(page, '[data-testid="finished"]', 1), 1);
+    check(
+      '最短で解いたので星が 3 つ',
+      await page.locator('[data-testid="finished"]').getByLabel('星 3 つ').count(),
+      1,
+    );
+
+    // 記録が残り、一覧に反映されること
+    await page.goto(`${BASE}/scenarios/`, { waitUntil: 'networkidle' });
+    check(
+      '片付けた仕事が一覧に出る',
+      await countEventually(page, '[data-scenario][data-done]', 1),
+      1,
+    );
+
+    // コンフリクトを含む回でも、途中の画面が壊れないこと
+    await page.goto(`${BASE}/scenarios/clash/`, { waitUntil: 'networkidle' });
+    await page.locator('#command-input').waitFor({ timeout: 15_000 });
+    await send('git merge spring');
+    check('止まると専用のパネルが出る', await countEventually(page, '[data-pane="merging"]', 1), 1);
+    check('その先の依頼が届く', await countEventually(page, '[data-step]', 2), 2);
+    await send('git add vase.txt');
+    await send('git commit');
+    check(
+      'コンフリクトの回も最後まで解ける',
+      await countEventually(page, '[data-testid="finished"]', 1),
+      1,
+    );
+
     check('コンソールにエラーが出ていない', consoleErrors, []);
 
     // アニメーションを減らす設定でも、中身は同じように出ること
