@@ -534,6 +534,55 @@ async function main(): Promise<void> {
       1,
     );
 
+    // ---- コマンドボタンの絞り込み ----
+    // 全部並べると 12 個になって肝心のものが埋もれるので、2 段に分けてある。
+    // とくに reset --hard が最初から見えているのは危うい ―
+    // シナリオの途中で押すと、そこまでの手順が消える。
+    //
+    // 枝が何本も出ている状態でも表が溢れないことを見たいので、
+    // いちばん枝の多い showcase で数える。
+    await page.goto(`${BASE}/scenarios/showcase/`, { waitUntil: 'networkidle' });
+    await page.locator('#command-input').waitFor({ timeout: 15_000 });
+    check(
+      '表に出るボタンは 6 個まで',
+      (await page.locator('[data-buttons="now"] button:not([data-more-toggle])').count()) <= 6,
+      true,
+    );
+
+    // reset --hard は「HEAD に親がある」ときだけ出る。
+    // 出る状態まで進めたうえで、それでも畳まれていることを見る。
+    await page.goto(`${BASE}/sandbox/`, { waitUntil: 'networkidle' });
+    const field3 = page.locator('#command-input');
+    await field3.waitFor({ timeout: 15_000 });
+    for (const line of ['git init', 'git commit -m one', 'git commit -m two']) {
+      await field3.fill(line);
+      await field3.press('Enter');
+      await page.waitForTimeout(160);
+    }
+
+    check(
+      'reset --hard は最初から見えてはいない',
+      await page.getByRole('button', { name: /reset --hard/ }).count(),
+      0,
+    );
+    check('畳んだ側は最初は出ていない', await page.locator('[data-buttons="more"]').count(), 0);
+
+    const moreToggle = page.locator('[data-more-toggle]');
+    check('畳んだ側は閉じていると伝わる', await moreToggle.getAttribute('aria-expanded'), 'false');
+    await moreToggle.click();
+    await page.waitForTimeout(150);
+    check('開くと開いたと伝わる', await moreToggle.getAttribute('aria-expanded'), 'true');
+    check(
+      '開けば reset --hard も押せる',
+      await page.getByRole('button', { name: /reset --hard/ }).count(),
+      1,
+    );
+    check(
+      '畳んだ側は aria-controls の指す先に出る',
+      await page.locator('#more-commands[data-buttons="more"]').count(),
+      1,
+    );
+
     // ---- 記事 ----
     // 記事とレベルは同じ id で結ばれている。行き来できることを通しで見る
     await page.goto(`${BASE}/docs/`, { waitUntil: 'networkidle' });

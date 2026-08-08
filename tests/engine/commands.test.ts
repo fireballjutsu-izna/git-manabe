@@ -189,6 +189,81 @@ describe('git branch', () => {
   });
 });
 
+describe('git tag', () => {
+  it('付けたコミットから動かない ― これが枝との違い', () => {
+    const before = play(['git init', 'git commit -m one', 'git tag v1.0']);
+    const pinned = headCommitId(before) as string;
+
+    const after = play(['git commit -m two'], before);
+    expect(after.tags).toEqual([{ name: 'v1.0', target: pinned }]);
+    // 枝のほうは付いていった
+    expect(after.branches.find((b) => b.name === 'main')?.target).not.toBe(pinned);
+  });
+
+  it('付けても HEAD は動かない', () => {
+    const before = play(['git init', 'git commit -m one']);
+    const after = run(before, 'git tag v1.0');
+    expect(after.state.head).toEqual(before.head);
+    expect(after.touched).toEqual(['repo']);
+    expect(after.log.join('\n')).toContain('ここから動きません');
+  });
+
+  it('コミットを指定して付けられる', () => {
+    const base = play(['git init', 'git commit -m one']);
+    const first = headCommitId(base) as string;
+    const state = play(['git commit -m two', `git tag ふりだし ${first}`], base);
+    expect(state.tags).toEqual([{ name: 'ふりだし', target: first }]);
+  });
+
+  it('同じ名前は 2 度付けられない', () => {
+    expect(
+      last(['git init', 'git commit -m one', 'git tag v1.0', 'git tag v1.0']).error,
+    ).toContain('もうあります');
+  });
+
+  it('枝と同じ名前は断る', () => {
+    expect(
+      last(['git init', 'git commit -m one', 'git branch release', 'git tag release']).error,
+    ).toContain('枝の名前として使われています');
+  });
+
+  it('コミットが無いうちは付けられない', () => {
+    expect(last(['git init', 'git tag v1.0']).error).toContain('まだコミットが 1 つもありません');
+  });
+
+  it('無いコミットを指すと断る', () => {
+    expect(last(['git init', 'git commit -m one', 'git tag v1.0 zzzzzzz']).error).toContain(
+      'というコミットも枝もありません',
+    );
+  });
+
+  it('-d で外してもコミットは残る', () => {
+    const state = play(['git init', 'git commit -m one', 'git tag v1.0', 'git tag -d v1.0']);
+    expect(state.tags).toEqual([]);
+    expect(Object.keys(state.commits)).toHaveLength(1);
+  });
+
+  it('無いタグは外せない', () => {
+    expect(last(['git init', 'git commit -m one', 'git tag -d v9']).error).toContain(
+      'というタグはありません',
+    );
+  });
+
+  it('引数なしは一覧', () => {
+    const empty = last(['git init', 'git commit -m one', 'git tag']);
+    expect(empty.log.join('\n')).toContain('タグはまだありません');
+
+    const listed = last(['git init', 'git commit -m one', 'git tag v1.0', 'git tag']);
+    expect(listed.log.join('\n')).toContain('v1.0');
+    expect(listed.state.tags).toHaveLength(1);
+  });
+
+  it('log にも tag: として出る', () => {
+    const result = last(['git init', 'git commit -m one', 'git tag v1.0', 'git log']);
+    expect(result.log.join('\n')).toContain('tag: v1.0');
+  });
+});
+
 describe('git switch / checkout', () => {
   it('枝の上でコミットすると、その枝だけが伸びる', () => {
     const state = play([
