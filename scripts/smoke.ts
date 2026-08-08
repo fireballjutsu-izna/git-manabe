@@ -489,6 +489,34 @@ async function main(): Promise<void> {
     await field.press('ArrowUp');
     check('↑ で履歴を呼び戻せる', await field.inputValue(), 'git commit -m 空白を含む指定');
 
+    // 指で操作する端末では、ターミナルを叩いても打てない
+    // （仮想キーボードがスペースを変換の確定に使うため）。入力欄へ送る
+    const touch = await browser.newPage({
+      viewport: { width: 393, height: 851 },
+      hasTouch: true,
+      isMobile: true,
+    });
+    await touch.goto(`${BASE}/sandbox/`, { waitUntil: 'networkidle' });
+    await touch.locator('#command-input').waitFor({ timeout: 15_000 });
+    const screen = await touch.locator('.xterm-screen').boundingBox();
+    await touch.touchscreen.tap(screen!.x + 30, screen!.y + 30);
+    await touch.waitForTimeout(300);
+    check(
+      'タッチ端末はターミナルを叩くと入力欄へ移る',
+      await touch.evaluate(() => document.activeElement?.id),
+      'command-input',
+    );
+    await touch.close();
+
+    // 合成クリック（element.click()）ではフォーカスが動かないので、実際に押す
+    await page.locator('.xterm-screen').click();
+    await page.waitForTimeout(200);
+    check(
+      'マウスの端末では、これまでどおりターミナルに入る',
+      await page.evaluate(() => document.activeElement?.className),
+      'xterm-helper-textarea',
+    );
+
     // ---- コマンドボタンの名前 ----
     // 課題が名前を指定しているレベルでは、その名前が出ること
     await page.goto(`${BASE}/levels/areas/`, { waitUntil: 'networkidle' });

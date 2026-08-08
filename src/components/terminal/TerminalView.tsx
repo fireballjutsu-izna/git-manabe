@@ -268,6 +268,23 @@ export default function TerminalView() {
       ref={hostRef}
       className="h-48 w-full overflow-hidden rounded-card border border-line bg-sunken p-2 sm:h-72"
       aria-label="git コマンドを打つターミナル"
+      onClick={() => {
+        /*
+         * 指で操作している端末では、ここを叩いても打てない。
+         * 仮想キーボードはスペースを「変換の確定」に使うので、
+         * 確定した文字だけが届き、空白そのものは落ちる ―
+         * xterm の入力経路では避けようがない。
+         *
+         * 叩いた人は打ちたいのだから、黙って下の入力欄へ送る。
+         *
+         * pointerup ではなく click で受けるのは、順番の都合。
+         * pointerup の直後に xterm が自分の入力欄へフォーカスを戻すので、
+         * そこで移しても取り返される。click はそのあとに来る。
+         */
+        if (!window.matchMedia('(pointer: coarse)').matches) return;
+        const field = document.getElementById('command-input');
+        if (field instanceof HTMLInputElement) field.focus();
+      }}
     />
   );
 }

@@ -60,6 +60,11 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
+      # 出力の中のリンクを全部辿る。Markdown のリンクは素の <a> になり
+      # basePath が付かないので、ソースを見ているだけでは気づけない。
+      - name: Links
+        run: npm run links
+
       - name: Smoke
         run: npm run smoke
 

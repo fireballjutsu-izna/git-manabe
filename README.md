@@ -166,6 +166,7 @@ npm run dev        # http://localhost:3000/git-manabe/
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
 | `npm test` | Vitest（シミュレータのコアを重点的に） |
+| `npm run links` | 書き出した `out/` の内部リンクを全部辿る（要 `npm run build`） |
 | `npm run smoke` | 書き出した `out/` を実際のブラウザで開いて通しで確認（要 `npm run build`） |
 | `npm run a11y` | アクセシビリティの検査。axe と、キーボード操作・読み上げの通し（要 `npm run build`） |
 | `npm run lighthouse` | Lighthouse。a11y / best practices / SEO は 100 必須（要 `npm run build`） |

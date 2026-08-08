@@ -13,6 +13,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "smoke": "node scripts/smoke.ts",
+    "links": "node scripts/links.ts",
     "a11y": "node scripts/a11y.ts",
     "og": "node scripts/make-og.ts",
     "lighthouse": "node scripts/lighthouse.ts"
