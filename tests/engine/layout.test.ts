@@ -12,9 +12,9 @@ function play(lines: string[]): RepoState {
 }
 
 /** id → 座標 の形にして、テストから読みやすくする。 */
-function coords(state: RepoState): Record<string, { x: number; y: number }> {
-  const out: Record<string, { x: number; y: number }> = {};
-  for (const n of layoutGraph(state).nodes) out[n.id] = { x: n.x, y: n.y };
+function at(state: RepoState): Record<string, { row: number; lane: number }> {
+  const out: Record<string, { row: number; lane: number }> = {};
+  for (const n of layoutGraph(state).nodes) out[n.id] = { row: n.row, lane: n.lane };
   return out;
 }
 
@@ -24,24 +24,61 @@ function idOf(state: RepoState, message: string): string {
   return commit.id;
 }
 
+/** 上から下へ、行の順にメッセージを並べる。 */
+function messagesTopDown(state: RepoState): string[] {
+  return layoutGraph(state)
+    .nodes.slice()
+    .sort((a, b) => a.row - b.row)
+    .map((n) => state.commits[n.id].message);
+}
+
 describe('コミットが無いとき', () => {
   it('空のレイアウトを返す', () => {
-    expect(layoutGraph(emptyState())).toEqual({ nodes: [], edges: [], cols: 0, lanes: 0 });
+    expect(layoutGraph(emptyState())).toEqual({ nodes: [], edges: [], rows: 0, lanes: 0 });
   });
 });
 
-describe('1 本の鎖', () => {
-  it('世代がそのまま列になり、全部が同じレーンに乗る', () => {
-    const state = play(['git init', 'git commit -m one', 'git commit -m two', 'git commit -m three']);
-    const at = coords(state);
+describe('並ぶ向き', () => {
+  it('新しいコミットが上に来る', () => {
+    // git log と同じ並び。打ったばかりのものが必ず最上段に出るので、
+    // 履歴が伸びてもスクロールせずに追える
+    const state = play(['git init', 'git commit -m 一', 'git commit -m 二', 'git commit -m 三']);
+    expect(messagesTopDown(state)).toEqual(['三', '二', '一']);
+  });
 
-    expect(at[idOf(state, 'one')]).toEqual({ x: 0, y: 0 });
-    expect(at[idOf(state, 'two')]).toEqual({ x: 1, y: 0 });
-    expect(at[idOf(state, 'three')]).toEqual({ x: 2, y: 0 });
-
+  it('1 行に 1 コミットだけが乗る', () => {
+    const state = play([
+      'git init',
+      'git commit -m 根',
+      'git checkout -b feature',
+      'git commit -m 枝の上',
+      'git switch main',
+      'git commit -m 幹の上',
+    ]);
     const layout = layoutGraph(state);
-    expect(layout.cols).toBe(3);
-    expect(layout.lanes).toBe(1);
+
+    // 行が情報の単位なので、2 つ乗ると id もメッセージも重なって読めない
+    const rows = layout.nodes.map((n) => n.row);
+    expect(new Set(rows).size).toBe(rows.length);
+    expect(layout.rows).toBe(Object.keys(state.commits).length);
+  });
+
+  it('親は必ず子より下の行にいる', () => {
+    const state = play([
+      'git init',
+      'git commit -m 根',
+      'git checkout -b feature',
+      'git commit -m 枝の上',
+      'git switch main',
+      'git commit -m 幹の上',
+      'git merge feature',
+    ]);
+    const rows = at(state);
+    for (const commit of Object.values(state.commits)) {
+      for (const parent of commit.parents) {
+        expect(rows[parent].row, `${commit.message} の親`).toBeGreaterThan(rows[commit.id].row);
+      }
+    }
   });
 
   it('辺は親から子へ張られる', () => {
@@ -52,7 +89,14 @@ describe('1 本の鎖', () => {
   });
 });
 
-describe('枝分かれ', () => {
+describe('レーン', () => {
+  it('1 本の鎖なら、全部が同じレーンに乗る', () => {
+    const state = play(['git init', 'git commit -m one', 'git commit -m two', 'git commit -m three']);
+    const layout = layoutGraph(state);
+    expect(layout.lanes).toBe(1);
+    expect(layout.nodes.every((n) => n.lane === 0)).toBe(true);
+  });
+
   it('main はレーン 0 に残り、分かれた枝が別のレーンに乗る', () => {
     const state = play([
       'git init',
@@ -62,19 +106,16 @@ describe('枝分かれ', () => {
       'git switch main',
       'git commit -m 幹の上',
     ]);
-    const at = coords(state);
+    const rows = at(state);
 
-    expect(at[idOf(state, 'one')]).toEqual({ x: 0, y: 0 });
-    expect(at[idOf(state, '幹の上')]).toEqual({ x: 1, y: 0 });
-    expect(at[idOf(state, '枝の上')].x).toBe(1);
-    expect(at[idOf(state, '枝の上')].y).toBeGreaterThan(0);
-
+    expect(rows[idOf(state, 'one')].lane).toBe(0);
+    expect(rows[idOf(state, '幹の上')].lane).toBe(0);
+    expect(rows[idOf(state, '枝の上')].lane).toBeGreaterThan(0);
     expect(layoutGraph(state).lanes).toBe(2);
   });
 
   it('feature を先に伸ばしても、レーン 0 は main のもの', () => {
-    // 枝の作成順ではなく名前で決まることを見る。
-    // feature に先にコミットしてから main に戻って伸ばしても、main が下に残ってほしい。
+    // 枝の作成順ではなく名前で決まることを見る
     const state = play([
       'git init',
       'git commit -m 根',
@@ -83,36 +124,31 @@ describe('枝分かれ', () => {
       'git switch main',
       'git commit -m 幹の上',
     ]);
-    const at = coords(state);
-    expect(at[idOf(state, '根')].y).toBe(0);
-    expect(at[idOf(state, '幹の上')].y).toBe(0);
-    expect(at[idOf(state, '枝の上')].y).toBe(1);
+    const rows = at(state);
+    expect(rows[idOf(state, '根')].lane).toBe(0);
+    expect(rows[idOf(state, '幹の上')].lane).toBe(0);
+    expect(rows[idOf(state, '枝の上')].lane).toBe(1);
   });
 
-  it('枝を切って 1 回コミットしただけでも、行は分ける', () => {
-    // 詰めれば 1 行に収まるが、そうすると main の流れと feature の流れが
-    // 同じ行・同じ色になり、1 本の連続した流れに見えてしまう。
-    // 親子関係は辺が示すので、行を分けても嘘にはならない。
+  it('枝を切って 1 回コミットしただけでも、レーンは分ける', () => {
+    // 詰めれば 1 レーンに収まるが、そうすると main の流れと feature の流れが
+    // 同じレーン・同じ色になり、1 本の連続した流れに見えてしまう。
+    // 親子関係は辺が示すので、レーンを分けても嘘にはならない。
     const state = play([
       'git init',
       'git commit -m 根',
       'git checkout -b feature',
       'git commit -m 枝の上',
     ]);
-    const at = coords(state);
-
     expect(layoutGraph(state).lanes).toBe(2);
-    expect(at[idOf(state, '根')]).toEqual({ x: 0, y: 0 });
-    expect(at[idOf(state, '枝の上')]).toEqual({ x: 1, y: 1 });
-    // 親子であることは、辺で示され続ける
+    expect(at(state)[idOf(state, '枝の上')].lane).toBe(1);
     expect(layoutGraph(state).edges).toEqual([
       { from: idOf(state, '根'), to: idOf(state, '枝の上') },
     ]);
   });
 
-  it('無関係な流れが、同じ行に載ることはない', () => {
-    // 枝を 3 本立ててから、いちばん古い枝を消す。
-    // 「空いた行を使い回す」実装だと、ここで無関係な区間が同じ行に並んでしまう。
+  it('無関係な流れが、同じレーンに載ることはない', () => {
+    // 「空いたレーンを使い回す」実装だと、ここで無関係な区間が並んでしまう
     const state = play([
       'git init',
       'git commit -m 根',
@@ -124,35 +160,18 @@ describe('枝分かれ', () => {
       'git switch main',
       'git commit -m mainの上',
     ]);
-    const at = coords(state);
-
-    // 3 つの流れが、それぞれ別の行にいる
-    const lanes = [at[idOf(state, 'mainの上')].y, at[idOf(state, 'aの上')].y, at[idOf(state, 'bの上')].y];
+    const rows = at(state);
+    const lanes = [
+      rows[idOf(state, 'mainの上')].lane,
+      rows[idOf(state, 'aの上')].lane,
+      rows[idOf(state, 'bの上')].lane,
+    ];
     expect(new Set(lanes).size).toBe(3);
-  });
-
-  it('枝が 3 本なら 3 レーンに分かれ、どれも重ならない', () => {
-    const state = play([
-      'git init',
-      'git commit -m 根',
-      'git checkout -b a',
-      'git commit -m aの上',
-      'git switch main',
-      'git checkout -b b',
-      'git commit -m bの上',
-      'git switch main',
-      'git commit -m mainの上',
-    ]);
-    const layout = layoutGraph(state);
-    expect(layout.lanes).toBe(3);
-
-    // 同じ (x, y) に 2 つのコミットが乗っていないこと
-    const cells = layout.nodes.map((n) => `${n.x},${n.y}`);
-    expect(new Set(cells).size).toBe(cells.length);
+    expect(layoutGraph(state).lanes).toBe(3);
   });
 });
 
-describe('レーンの安定性', () => {
+describe('安定性', () => {
   it('同じ状態からは、いつも同じ座標が出る', () => {
     const state = play([
       'git init',
@@ -166,19 +185,22 @@ describe('レーンの安定性', () => {
   });
 
   it('コミットを 1 つ足しても、既にあるコミットのレーンは動かない', () => {
+    // 行は 1 つずつ下へずれる（新しいものが上に入るので当然）。
+    // だがレーンまで入れ替わると、グラフ全体が横に飛び跳ねて読めなくなる
     const before = play([
       'git init',
       'git commit -m one',
       'git checkout -b feature',
       'git commit -m two',
     ]);
-    const beforeAt = coords(before);
+    const beforeAt = at(before);
 
     const after = run(before, 'git commit -m three').state;
-    const afterAt = coords(after);
+    const afterAt = at(after);
 
     for (const id of Object.keys(beforeAt)) {
-      expect(afterAt[id], id).toEqual(beforeAt[id]);
+      expect(afterAt[id].lane, id).toBe(beforeAt[id].lane);
+      expect(afterAt[id].row, id).toBe(beforeAt[id].row + 1);
     }
   });
 });
@@ -215,13 +237,14 @@ describe('マージコミット', () => {
       'git commit -m 幹の上',
       'git merge feature',
     ]);
-    const at = coords(state);
+    const rows = at(state);
     const merge = Object.values(state.commits).find((c) => c.parents.length === 2)!;
 
-    expect(at[idOf(state, '根')]).toEqual({ x: 0, y: 0 });
-    expect(at[idOf(state, '幹の上')]).toEqual({ x: 1, y: 0 });
-    expect(at[merge.id]).toEqual({ x: 2, y: 0 });
-    expect(at[idOf(state, '枝の上')]).toEqual({ x: 1, y: 1 });
+    expect(rows[merge.id].lane).toBe(0);
+    expect(rows[merge.id].row).toBe(0); // いちばん新しいので最上段
+    expect(rows[idOf(state, '幹の上')].lane).toBe(0);
+    expect(rows[idOf(state, '枝の上')].lane).toBe(1);
+    expect(rows[idOf(state, '根')].lane).toBe(0);
   });
 
   it('fast-forward ではコミットもレーンも増えない', () => {
@@ -251,10 +274,9 @@ describe('どの枝からも指されていないコミット', () => {
       'git commit -m 迷子',
     ]);
 
-    const at = coords(state);
-    expect(at[idOf(state, '迷子')]).toBeDefined();
-    expect(at[idOf(state, '迷子')].x).toBe(1);
-    expect(at[idOf(state, '迷子')].y).not.toBe(at[idOf(state, 'two')].y);
+    const rows = at(state);
+    expect(rows[idOf(state, '迷子')]).toBeDefined();
+    expect(rows[idOf(state, '迷子')].lane).not.toBe(rows[idOf(state, 'two')].lane);
   });
 
   it('枝を消しても、コミットは並び続ける', () => {

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { Bucket, Storefront, Workbench } from '@/components/ui/ShopIcons';
 import {
   aheadBehind,
   currentBranchName,
@@ -21,11 +22,21 @@ export function AreaPanes({
   state,
   touched,
   pulse,
+  /**
+   * 見た目の切り替え。
+   *
+   * florist はシナリオ専用。**見出しは git の言葉のまま**にして、
+   * 店の言い方は note に添えるだけにする ―
+   * 覚えてほしいのは git の語彙で、店の言い方はその手がかりにすぎない。
+   */
+  theme = 'plain',
 }: {
   state: RepoState;
   touched: Area[];
   pulse: number;
+  theme?: 'plain' | 'florist';
 }) {
+  const shop = theme === 'florist';
   const reduce = useReducedMotion();
   const [lit, setLit] = useState<Area[]>([]);
 
@@ -52,7 +63,12 @@ export function AreaPanes({
       <Pane
         id="workingDir"
         title="作業ディレクトリ"
-        note="編集しただけで、まだ Git に渡していない"
+        note={
+          shop
+            ? '作業台 ― 手を入れただけで、まだ Git に渡していない'
+            : '編集しただけで、まだ Git に渡していない'
+        }
+        icon={shop ? <Workbench /> : undefined}
         accent="var(--area-working)"
         tint="var(--tint-rose)"
         lit={lit.includes('workingDir')}
@@ -70,7 +86,10 @@ export function AreaPanes({
       <Pane
         id="index"
         title="ステージ（index）"
-        note="次のコミットに含めると決めた変更"
+        note={
+          shop ? 'バケツ ― 次に出すと決めたぶん' : '次のコミットに含めると決めた変更'
+        }
+        icon={shop ? <Bucket /> : undefined}
         accent="var(--area-index)"
         tint="var(--tint-amber)"
         lit={lit.includes('index')}
@@ -83,7 +102,8 @@ export function AreaPanes({
       <Pane
         id="repo"
         title="リポジトリ"
-        note="コミットとして確定した履歴"
+        note={shop ? '店頭 ― 出したものの記録' : 'コミットとして確定した履歴'}
+        icon={shop ? <Storefront /> : undefined}
         accent="var(--area-repo)"
         tint="var(--tint-lime)"
         lit={lit.includes('repo')}
@@ -302,6 +322,7 @@ function Pane({
   lit,
   items,
   empty,
+  icon,
 }: {
   id: string;
   title: string;
@@ -311,6 +332,7 @@ function Pane({
   lit: boolean;
   items: Item[];
   empty: string;
+  icon?: React.ReactNode;
 }) {
   return (
     <section
@@ -324,7 +346,8 @@ function Pane({
       aria-live="polite"
     >
       <header className="flex items-baseline justify-between gap-2">
-        <h3 className="text-sm font-bold" style={{ color: accent }}>
+        <h3 className="flex items-center gap-1.5 text-sm font-bold" style={{ color: accent }}>
+          {icon}
           {title}
         </h3>
         <span className="text-[11px] text-muted">{items.length > 0 ? items.length : ''}</span>
