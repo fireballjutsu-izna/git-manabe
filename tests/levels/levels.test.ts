@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { emptyState, run, type RepoState } from '@/lib/git-engine';
+import { DOCS } from '@/lib/docs';
 import { LEVELS, checkLevel, playCommands, setupState, shapeSignature } from '@/lib/levels';
 
 /**
@@ -130,5 +131,27 @@ describe('形の比べ方', () => {
     const a = play(pushed);
     const b = play([...pushed, 'teammate 1', 'git fetch origin']);
     expect(shapeSignature(a)).not.toBe(shapeSignature(b));
+  });
+});
+
+describe('記事とレベルの対応', () => {
+  it('記事とレベルの id が 1 対 1 で揃っている', () => {
+    // DocNav がレベルへ送り、レベルが記事へ返す。
+    // 片方だけ増えると、リンクが黙って消える
+    expect(DOCS.map((d) => d.id)).toEqual(LEVELS.map((l) => l.id));
+  });
+
+  it('記事の題がレベルの題と食い違っていない', () => {
+    // 完全一致までは求めない（記事のほうが長い題を付けることがある）が、
+    // 別物になっていたら、たどり着いた人が混乱する
+    for (const doc of DOCS) {
+      const level = LEVELS.find((l) => l.id === doc.id)!;
+      const core = (s: string) => s.split(/[―—]/)[0].trim();
+      expect(core(doc.title), doc.id).toBe(core(level.title));
+    }
+  });
+
+  it('どの記事にも 1 行の要約がある', () => {
+    for (const doc of DOCS) expect(doc.summary.length, doc.id).toBeGreaterThan(10);
   });
 });

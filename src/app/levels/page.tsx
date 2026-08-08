@@ -1,11 +1,12 @@
-import type { Metadata } from 'next';
 import { LevelList } from '@/components/level/LevelList';
+import { pageMetadata } from '@/lib/seo';
 
-export const metadata: Metadata = {
+export const metadata = pageMetadata({
   title: 'レベル',
   description:
-    '3 領域から始めて、ブランチ・detached HEAD・merge・reset・rebase・reflog・リモートまで、1 つずつ課題を解きながら進みます。',
-};
+    '3 領域から始めて、ブランチ・detached HEAD・merge・コンフリクト・reset・rebase・reflog・リモートまで、1 つずつ課題を解きながら進みます。',
+  path: '/levels/',
+});
 
 export default function LevelsPage() {
   return <LevelList />;

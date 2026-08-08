@@ -16,7 +16,8 @@ Git は `add` と `commit` までは覚えられますが、その先でブラ�
 
 | | |
 | --- | --- |
-| **レベル**（全 13 個） | 1 つにつき概念 1 つ。状況はこちらで用意するので、その概念そのものを打つところに集中できます。目標の形に着けば**手順は問いません** |
+| **記事**（全 13 本） | 1 本につき概念 1 つ。仕組みを日本語で読みます。末尾から同じ題のレベルへ進めます |
+| **レベル**（全 13 個） | 記事と同じ順・同じ題。状況はこちらで用意するので、その概念そのものを打つところに集中できます。目標の形に着けば**手順は問いません** |
 | **サンドボックス** | 自由に触る場所。何をしても壊れません |
 
 クリアの記録と連続日数は `localStorage` に残ります。アカウントはありません。
@@ -167,23 +168,31 @@ npm run dev        # http://localhost:3000/git-manabe/
 | `npm test` | Vitest（シミュレータのコアを重点的に） |
 | `npm run smoke` | 書き出した `out/` を実際のブラウザで開いて通しで確認（要 `npm run build`） |
 | `npm run a11y` | アクセシビリティの検査。axe と、キーボード操作・読み上げの通し（要 `npm run build`） |
+| `npm run lighthouse` | Lighthouse。a11y / best practices / SEO は 100 必須（要 `npm run build`） |
+| `npm run og` | 共有時に出る画像（`public/og.png`）を作り直す |
 
 ### 構成
 
 ```
 src/
 ├─ app/                Next.js App Router のページ
-│  ├─ (docs)/          MDX の解説記事
+│  ├─ (docs)/          MDX の記事（はじめに・カリキュラム 13 本）
+│  ├─ docs/            記事の一覧
 │  ├─ levels/          レベル一覧と、各レベル
-│  └─ sandbox/         コマンドを打って木を育てる本体
+│  ├─ sandbox/         コマンドを打って木を育てる本体
+│  ├─ sitemap.ts       sitemap.xml（ビルド時に静的生成）
+│  └─ robots.ts        robots.txt
 ├─ components/
+│  ├─ docs/            記事の末尾に置く、次の一手
 │  ├─ graph/           SVG のコミットグラフと 3 領域パネル
 │  ├─ level/           レベル一覧と、レベルを遊ぶ画面
-│  ├─ terminal/        ターミナル UI
+│  ├─ terminal/        ターミナル UI と、読み上げ用の領域
 │  └─ ui/              共通の部品
 └─ lib/
    ├─ git-engine/      シミュレータのコア（React にも DOM にも依存しない）
+   ├─ docs/            記事の目次（レベルと同じ id で対応させる）
    ├─ levels/          レベルの定義と、形による合格判定
+   ├─ seo/             ページごとのメタデータ（seo.ts）
    └─ storage/         localStorage の学習記録
 ```
 

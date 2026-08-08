@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { LevelRunner } from '@/components/level/LevelRunner';
 import { findLevel, LEVELS } from '@/lib/levels';
+import { pageMetadata } from '@/lib/seo';
 
 /** 静的書き出しなので、どのレベルのページを作るかを先に伝える。 */
 export function generateStaticParams() {
@@ -15,7 +16,11 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const level = findLevel((await params).id);
   if (!level) return { title: 'レベル' };
-  return { title: level.title, description: level.intro };
+  return pageMetadata({
+    title: level.title,
+    description: level.intro,
+    path: `/levels/${level.id}/`,
+  });
 }
 
 export default async function LevelPage({ params }: { params: Promise<{ id: string }> }) {

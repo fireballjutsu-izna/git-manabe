@@ -6,6 +6,7 @@ import { AreaPanes } from '@/components/graph/AreaPanes';
 import { CommitGraph } from '@/components/graph/CommitGraph';
 import { CommandButtons } from '@/components/terminal/CommandButtons';
 import { Terminal } from '@/components/terminal/Terminal';
+import { findDoc } from '@/lib/docs';
 import { checkLevel, findLevel, LEVELS, levelIndex, setupState } from '@/lib/levels';
 import { useProgressStore } from '@/store/level';
 import { useRepoStore } from '@/store/repo';
@@ -72,6 +73,20 @@ function Runner({ level }: { level: NonNullable<ReturnType<typeof findLevel>> })
         </p>
         <h1 className="mt-1 text-xl font-bold text-accent">{level.title}</h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed">{level.intro}</p>
+        {/* 詰まったときの逃げ道。ヒントより先に、仕組みのほうを見たい人もいる */}
+        {findDoc(level.id) && (
+          <p className="mt-2 text-xs text-muted">
+            仕組みから知りたいときは{' '}
+            <Link
+              prefetch={false}
+              href={`/docs/${level.id}`}
+              className="text-cyan-neon underline underline-offset-2"
+            >
+              記事「{findDoc(level.id)!.title}」
+            </Link>
+            へ。
+          </p>
+        )}
       </header>
 
       <div
@@ -91,14 +106,14 @@ function Runner({ level }: { level: NonNullable<ReturnType<typeof findLevel>> })
           <p className="mt-1 text-muted">記録に残しました。</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {next && (
-              <Link
+              <Link prefetch={false}
                 href={`/levels/${next.id}`}
                 className="rounded border border-line-lit px-3 py-1.5 text-fg no-underline hover:border-cyan-neon"
               >
                 次へ: {next.title} →
               </Link>
             )}
-            <Link
+            <Link prefetch={false}
               href="/levels"
               className="rounded border border-line px-3 py-1.5 text-muted no-underline hover:text-fg"
             >

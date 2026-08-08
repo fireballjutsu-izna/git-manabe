@@ -470,6 +470,27 @@ async function main(): Promise<void> {
     check('404 から戻る道がある', await missing.locator('main a').count(), 3);
     await missing.close();
 
+    // ---- 記事 ----
+    // 記事とレベルは同じ id で結ばれている。行き来できることを通しで見る
+    await page.goto(`${BASE}/docs/`, { waitUntil: 'networkidle' });
+    check('記事が 13 本並ぶ', await page.locator('[data-doc]').count(), 13);
+
+    await page.goto(`${BASE}/docs/conflict/`, { waitUntil: 'networkidle' });
+    check('記事の見出しが出る', await page.locator('h1').count(), 1);
+    check(
+      '記事から対応するレベルへ行ける',
+      await page.locator('a[href$="/levels/conflict/"]').count(),
+      1,
+    );
+    await page.locator('a[href$="/levels/conflict/"]').first().click();
+    await page.waitForURL('**/levels/conflict/**', { timeout: 10_000 });
+    await page.locator('textarea.xterm-helper-textarea').waitFor({ timeout: 15_000 });
+    check(
+      'レベルから記事へ戻れる',
+      await page.locator('a[href$="/docs/conflict/"]').count(),
+      1,
+    );
+
     check('コンソールにエラーが出ていない', consoleErrors, []);
 
     // アニメーションを減らす設定でも、中身は同じように出ること

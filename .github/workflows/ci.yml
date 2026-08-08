@@ -68,6 +68,11 @@ jobs:
       - name: Accessibility
         run: npm run a11y
 
+      # 重いものをうっかり足していないか。accessibility / best-practices / seo は
+      # 100 を必須、performance はページごとに下限を置いてある。
+      - name: Lighthouse
+        run: npm run lighthouse
+
       # 失敗したときだけ、目で見るためのスクリーンショットを残す。
       - name: Upload screenshot
         if: failure()

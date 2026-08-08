@@ -85,7 +85,7 @@ export function Sandbox() {
           <p className="mt-4 text-[11px] leading-relaxed text-muted">
             <code className="font-mono">touch</code> と <code className="font-mono">edit</code>{' '}
             は Git のコマンドではありません。作業ディレクトリに変更を作るための、このサイト独自のものです。
-            仕組みの説明は <Link href="/start" className="text-cyan-neon underline underline-offset-2">はじめに</Link> にあります。
+            仕組みの説明は <Link prefetch={false} href="/start" className="text-cyan-neon underline underline-offset-2">はじめに</Link> にあります。
           </p>
         </aside>
       </div>
