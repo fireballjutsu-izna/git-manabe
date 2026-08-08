@@ -32,6 +32,7 @@ const SOLUTIONS: Record<string, string[]> = {
     'git add .gitignore',
     'git commit -m ".env を追跡から外した"',
   ],
+  interactive: ['git rebase -i main', 'todo squash 2', 'todo drop 3', 'todo run'],
   conflict: ['git merge feature', 'git checkout --ours app.ts', 'git add app.ts', 'git commit'],
 };
 

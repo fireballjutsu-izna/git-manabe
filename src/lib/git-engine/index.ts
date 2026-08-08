@@ -20,6 +20,8 @@ export type {
   Remote,
   RepoState,
   StashEntry,
+  Todo,
+  TodoItem,
   Tree,
 } from './types';
 

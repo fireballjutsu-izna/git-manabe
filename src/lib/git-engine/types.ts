@@ -100,6 +100,46 @@ export interface StashEntry {
   base: string | null;
 }
 
+/**
+ * 対話的 rebase（`git rebase -i`）の todo 1 行。
+ *
+ * 本物はエディタで書き換えるテキストの 1 行そのもの:
+ *
+ *   pick   a1b2c3d  ラッピングを直した
+ *   squash e4f5g6h  typo
+ *   drop   i7j8k9l  デバッグ用のログ
+ *
+ * このサイトにはエディタが無いので、同じものをパネルとして持つ。
+ */
+export interface TodoItem {
+  /** 元のコミット id。 */
+  id: string;
+  action: 'pick' | 'squash' | 'reword' | 'drop';
+  /** 出来上がるコミットのメッセージ。reword で書き換わる。 */
+  message: string;
+  /** 元のメッセージ。reword したことを見せるために取っておく。 */
+  original: string;
+}
+
+/**
+ * まだ実行していない todo。
+ *
+ * `git rebase -i` を打つと**ここに入るだけ**で、履歴には何も起きない。
+ * 並べ替えて todo run（本物ならエディタを閉じる）で初めて動き出す。
+ * 「書き換えの計画を立ててから、まとめて実行する」のが -i の形なので、
+ * 計画と実行を state の上でも分けておく。
+ */
+export interface Todo {
+  /** 積む先のコミット。 */
+  onto: string;
+  /** ユーザーが打った upstream の名前。表示にだけ使う。 */
+  upstream: string;
+  /** 古い順（本物の todo ファイルと同じ並び）。 */
+  items: TodoItem[];
+  /** やめたときに戻すための、始める前の状態。 */
+  saved: Pausing['saved'];
+}
+
 /** ぶつかったファイル 1 件。片側を選び直せるように、両側の中身を取っておく。 */
 export interface ConflictFile {
   path: string;
@@ -146,6 +186,13 @@ export interface Pausing {
   };
   /** rebase・cherry-pick で、まだ当てていないコミット（古い順）。 */
   remaining: string[];
+  /**
+   * 対話的 rebase の途中なら、残りの todo と、まとめ中のメッセージ。
+   *
+   * 素の rebase と違って「いま何をまとめている最中か」を覚えている必要がある
+   * ― squash の途中で止まったら、続きも同じ塊に足さなければならない。
+   */
+  todo?: { items: TodoItem[]; messages: string[]; leadId?: string };
   /** これまでに作り直したコミットの対応（元 → 複製）。 */
   done: { before: string; after: string }[];
 }
@@ -218,6 +265,8 @@ export interface RepoState {
   stage: Tree;
   /** merge・rebase・cherry-pick が途中で止まっているなら、その情報。 */
   pausing: Pausing | null;
+  /** 対話的 rebase の計画を立てている最中なら、その todo。 */
+  todo: Todo | null;
   reflog: ReflogEntry[];
   /** id の採番と createdAt の元になる単調カウンタ。Math.random() は使わない。 */
   seq: number;

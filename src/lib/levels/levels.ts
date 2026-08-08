@@ -271,6 +271,57 @@ export const LEVELS: Level[] = [
     ],
   },
   {
+    id: 'interactive',
+    title: '対話的 rebase ― まとめる・落とす・並べ替える',
+    intro:
+      'git rebase -i は、置き直す前に「どう置き直すか」を書き換えられる rebase です。打った時点では、まだ履歴は何も変わっていません。',
+    task:
+      '3 つに分かれてしまった同じ作業を 1 つにまとめ、デバッグ用のコミットは落として、main の上へ置き直してください。',
+    setup: [
+      'git init',
+      'touch shop.txt',
+      'git add .',
+      'git commit -m 開店',
+      'git switch -c wrapping',
+      'touch wrap.txt',
+      'git add .',
+      'git commit -m ラッピングを直した',
+      'touch wrap2.txt',
+      'git add .',
+      'git commit -m typo',
+      'touch debug.txt',
+      'git add .',
+      'git commit -m デバッグ用のログ',
+      'git switch main',
+      'touch price.txt',
+      'git add .',
+      'git commit -m 値札を差し替えた',
+      'git switch wrapping',
+    ],
+    check: (s) => {
+      if (s.todo !== null || s.pausing !== null) return false;
+      const head = headCommitId(s);
+      if (!head) return false;
+      // main の上に 1 件だけ載っていて、debug.txt が入っていないこと
+      const tip = s.commits[head];
+      if (tip.parents.length !== 1) return false;
+      const parent = s.commits[tip.parents[0]];
+      if (parent.message !== '値札を差し替えた') return false;
+      return (
+        tip.tree['wrap.txt'] !== undefined &&
+        tip.tree['wrap2.txt'] !== undefined &&
+        tip.tree['debug.txt'] === undefined
+      );
+    },
+    hints: [
+      'git rebase -i main で計画を立てます。打っただけでは、まだ何も起きません。',
+      '上に出る表で、2 行目を squash（1 つ上にまとめる）、3 行目を drop（落とす）にします。',
+      'todo squash 2 と todo drop 3 でも同じことができます。',
+      '決まったら todo run です（本物ならエディタを閉じるところです）。',
+      'やめたくなったら git rebase --abort で、いつでも何も無かったことにできます。',
+    ],
+  },
+  {
     id: 'reflog',
     title: 'reflog ― やらかしから戻る',
     intro:

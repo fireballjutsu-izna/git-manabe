@@ -51,7 +51,7 @@ export const GIT_COMMANDS = [
 ] as const;
 
 /** Git のコマンドではないが、サンドボックスの中でだけ使える補助コマンド。 */
-export const HELPER_COMMANDS = ['touch', 'edit', 'append', 'teammate'] as const;
+export const HELPER_COMMANDS = ['touch', 'edit', 'append', 'todo', 'teammate'] as const;
 
 /**
  * 実際の Git にはあるが、このサイトではまだ実装していないもの。
