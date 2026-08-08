@@ -80,10 +80,26 @@ export default function TerminalView() {
       // 学習用の画面なので、遡れる量は控えめでよい
       scrollback: 800,
     });
+    /*
+     * Tab はターミナルに渡さず、ブラウザに任せる。
+     *
+     * xterm は既定で Tab を文字として飲み込むので、
+     * キーボードだけで操作している人がここへ入ると**二度と出られない**
+     * ― WCAG 2.1.2（キーボードトラップ）に真正面から当たる。
+     * このサイトの git にはタブ補完が無いので、渡さなくて困ることは何もない。
+     */
+    term.attachCustomKeyEventHandler((event) => event.key !== 'Tab');
+
     const fit = new FitAddon();
     term.loadAddon(fit);
     term.open(host);
     fit.fit();
+
+    // xterm が作る入力欄のラベルは "Terminal input" の固定文字列。
+    // 実際にフォーカスが乗るのはここなので、日本語に付け替える。
+    host
+      .querySelector('textarea.xterm-helper-textarea')
+      ?.setAttribute('aria-label', 'git コマンドを打ちます。結果は下に読み上げられます');
 
     /** 入力中の行と、その中でのカーソル位置。 */
     let buffer = '';

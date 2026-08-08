@@ -63,6 +63,11 @@ jobs:
       - name: Smoke
         run: npm run smoke
 
+      # 目で見ている限り気づけない壊れ方（キーボードトラップ・読み上げ）は、
+      # ここでしか捕まらない。smoke と同じブラウザを使い回す。
+      - name: Accessibility
+        run: npm run a11y
+
       # 失敗したときだけ、目で見るためのスクリーンショットを残す。
       - name: Upload screenshot
         if: failure()
