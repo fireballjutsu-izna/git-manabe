@@ -34,6 +34,13 @@ export function serveStatic(root: string, port: number): Promise<Server> {
     if (!existsSync(file) && existsSync(`${file}.html`)) file = `${file}.html`;
 
     if (!existsSync(file)) {
+      // GitHub Pages と同じく、無い住所には 404.html を返す
+      const notFound = join(root, '404.html');
+      if (existsSync(notFound)) {
+        res.writeHead(404, { 'content-type': TYPES['.html'] });
+        createReadStream(notFound).pipe(res);
+        return;
+      }
       res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' }).end('not found');
       return;
     }

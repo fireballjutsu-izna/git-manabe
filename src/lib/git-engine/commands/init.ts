@@ -22,7 +22,7 @@ export function init(state: RepoState): CommandResult {
   return ok(
     next,
     [
-      'からのリポジトリを作りました。',
+      '空のリポジトリを作りました。',
       'HEAD は main を指していますが、main という枝はまだありません。',
       '最初の commit が、その枝を生みます。',
     ],

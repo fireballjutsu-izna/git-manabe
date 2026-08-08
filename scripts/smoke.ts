@@ -440,6 +440,36 @@ async function main(): Promise<void> {
     );
     check('解くとクリア表示が出る', await countEventually(page, '[data-testid="cleared"]', 1), 1);
 
+    // ---- 狭い画面 ----
+    // グリッドの子は min-width:auto が既定で、xterm の最小幅にひきずられて
+    // 本文ごと横にはみ出す。目で見て気づきにくいので、数で押さえておく。
+    const narrow = await browser.newPage({ viewport: { width: 360, height: 780 } });
+    for (const path of ['/', '/start/', '/levels/', '/sandbox/', '/levels/conflict/']) {
+      await narrow.goto(`${BASE}${path}`, { waitUntil: 'networkidle' });
+      await narrow.waitForTimeout(500);
+      const size = await narrow.evaluate(() => ({
+        scroll: document.documentElement.scrollWidth,
+        inner: window.innerWidth,
+        nav: document.querySelector('header nav')!.getBoundingClientRect().height,
+        bar: document.querySelector('header > div')!.getBoundingClientRect().height,
+      }));
+      check(`360px で横にはみ出さない ${path}`, size.scroll <= size.inner + 1, true);
+      check(`360px でヘッダーが 1 行に収まる ${path}`, size.nav <= size.bar, true);
+    }
+    await narrow.close();
+
+    // 404 は日本語で、行き先が付いていること
+    const missing = await browser.newPage({ viewport: { width: 1024, height: 700 } });
+    const missingRes = await missing.goto(`${BASE}/nope/`, { waitUntil: 'domcontentloaded' });
+    check('無い住所は 404 を返す', missingRes?.status(), 404);
+    check(
+      '404 は日本語で出る',
+      await missing.getByText('そのページはありません').count(),
+      1,
+    );
+    check('404 から戻る道がある', await missing.locator('main a').count(), 3);
+    await missing.close();
+
     check('コンソールにエラーが出ていない', consoleErrors, []);
 
     // アニメーションを減らす設定でも、中身は同じように出ること

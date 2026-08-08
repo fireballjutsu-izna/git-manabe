@@ -150,12 +150,16 @@ function Runner({ level }: { level: NonNullable<ReturnType<typeof findLevel>> })
             </ol>
           )}
 
-          <div>
+          <div className="min-w-0">
             <h2 className="mb-2 text-xs font-bold tracking-wide text-accent">打てるコマンド</h2>
             <CommandButtons />
           </div>
 
-          <div>
+          {/*
+            min-w-0 が無いと、グリッドの子は min-width:auto のまま ―
+            xterm の最小幅にひきずられて、狭い画面で本文ごと横にはみ出す。
+          */}
+          <div className="min-w-0">
             <h2 className="mb-2 text-xs font-bold tracking-wide text-accent">ターミナル</h2>
             <Terminal />
           </div>

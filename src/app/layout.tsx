@@ -33,24 +33,29 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="min-h-dvh antialiased">
         <header className="sticky top-0 z-20 border-b border-line bg-bg/85 backdrop-blur">
-          <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4">
-            <Link href="/" className="flex items-baseline gap-2 no-underline">
+          {/*
+            狭い画面ではリンクが折り返して、高さ 14 の帯からはみ出す。
+            改行を禁じたうえで、入りきらないぶんは横に流す。
+          */}
+          <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
+            <Link href="/" className="flex shrink-0 items-baseline gap-2 no-underline">
               <span className="text-lg font-bold tracking-wide text-accent">{SITE.name}</span>
               <span className="hidden text-xs text-muted sm:inline">{SITE.tagline}</span>
             </Link>
-            <nav className="ml-auto flex items-center gap-1 text-sm">
-              <Link
-                href="/levels"
-                className="rounded px-2.5 py-1.5 text-muted no-underline hover:bg-inset hover:text-fg"
-              >
-                レベル
-              </Link>
-              <Link
-                href="/sandbox"
-                className="rounded px-2.5 py-1.5 text-muted no-underline hover:bg-inset hover:text-fg"
-              >
-                サンドボックス
-              </Link>
+            <nav className="ml-auto flex min-w-0 items-center gap-0.5 overflow-x-auto text-sm sm:gap-1">
+              {[
+                { href: '/start', label: 'はじめに' },
+                { href: '/levels', label: 'レベル' },
+                { href: '/sandbox', label: 'サンドボックス' },
+              ].map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="rounded px-2 py-1.5 whitespace-nowrap text-muted no-underline hover:bg-inset hover:text-fg sm:px-2.5"
+                >
+                  {item.label}
+                </Link>
+              ))}
               <ThemeToggle />
             </nav>
           </div>

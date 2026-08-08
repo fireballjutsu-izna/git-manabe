@@ -57,7 +57,7 @@ export const LEVELS: Level[] = [
     title: 'fast-forward マージ',
     intro:
       '分かれていない枝を取り込むとき、Git は合流点を作りません。名前を前へ滑らせるだけで済むからです。',
-    task: 'main へ戻り、feature を取り込んでください。マージコミットはできません。',
+    task: 'main へ戻り、feature を取り込んでください。マージコミットは作られません。',
     setup: ['git init', 'git commit -m 根', 'git switch -c feature', 'git commit -m 枝の上'],
     goal: [
       'git init',
