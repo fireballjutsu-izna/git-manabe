@@ -77,6 +77,12 @@ export const DOCS: Doc[] = [
     summary: 'merge との違いは 1 点。こちらは作り直すので、id が変わる',
   },
   {
+    id: 'interactive',
+    title: '対話的 rebase ― まとめる・落とす・並べ替える',
+    summary:
+      '置き直す前に計画を書き換えられる rebase。squash でまとめ、drop で落とす。押した瞬間には、まだ何も起きていない',
+  },
+  {
     id: 'reflog',
     title: 'reflog ― やらかしから戻る',
     summary: '失くしたコミットへの最後の道。HEAD が通ってきた道は全部残っている',

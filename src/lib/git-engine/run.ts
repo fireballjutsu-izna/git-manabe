@@ -26,6 +26,7 @@ import { rm } from './commands/rm';
 import { stash } from './commands/stash';
 import { status } from './commands/status';
 import { tag } from './commands/tag';
+import { todo } from './commands/todo';
 import type { CommandResult, RepoState } from './types';
 
 type Handler = (state: RepoState, command: ParsedCommand) => CommandResult;
@@ -59,6 +60,7 @@ const HELPER_HANDLERS: Record<string, Handler> = {
   touch,
   edit,
   append,
+  todo,
   teammate,
 };
 
@@ -87,6 +89,21 @@ const ALLOWED_WHILE_PAUSED = new Set([
   'branch',
   'touch',
   'edit',
+]);
+
+/**
+ * 計画を立てている最中（git rebase -i のあと）に打てるコマンド。
+ *
+ * まだ履歴には何も起きていないので、うっかり別のことを始められると
+ * 計画だけが宙に浮く。組み立てと、見るだけのものに絞る。
+ */
+const ALLOWED_WHILE_PLANNING = new Set([
+  'todo',
+  'rebase',
+  'status',
+  'log',
+  'diff',
+  'branch',
 ]);
 
 /**
@@ -159,6 +176,14 @@ function dispatch(state: RepoState, line: string): CommandResult {
   if (state.pausing && !ALLOWED_WHILE_PAUSED.has(command.name)) {
     const blocked = requireNoPause(state);
     if (blocked) return blocked;
+  }
+
+  if (state.todo && !ALLOWED_WHILE_PLANNING.has(command.name)) {
+    return fail(
+      state,
+      '書き換えの計画を立てている途中です。',
+      'todo run で実行するか、git rebase --abort でやめてください。',
+    );
   }
 
   if (command.isGit) {

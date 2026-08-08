@@ -108,6 +108,15 @@ export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?
 
   if (!state.initialized) {
     now({ label: 'git init', line: 'git init', hint: 'ここから始まります' });
+  } else if (state.todo) {
+    /*
+     * 計画を立てている最中。組み立ては上のパネルでやるほうが早いので、
+     * ここには「実行」と「やめる」と、見るだけのものだけを出す。
+     */
+    now({ label: 'todo run', line: 'todo run', hint: '計画を実行する', weight: 0 });
+    now({ label: 'todo list', line: 'todo list', hint: 'いまの計画を見る', weight: 1 });
+    now({ label: 'git rebase --abort', line: 'git rebase --abort', hint: 'やめる', weight: 2 });
+    now({ label: 'git log --oneline', line: 'git log --oneline', weight: 3 });
   } else if (state.pausing) {
     /*
      * 止まっている間は、通るコマンドだけを出す。
@@ -231,6 +240,11 @@ export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?
             label: `git rebase ${b.name}`,
             line: `git rebase ${b.name}`,
             hint: 'コピーし直す（id が変わる）',
+          });
+          more({
+            label: `git rebase -i ${b.name}`,
+            line: `git rebase -i ${b.name}`,
+            hint: 'まとめる・落とす・並べ替える',
           });
         }
       }

@@ -350,7 +350,7 @@ async function main(): Promise<void> {
     // ---- レベル ----
     // 一覧 → 1 つ解く → クリア記録が残り、一覧に反映される、まで通す
     await page.goto(`${BASE}/levels/`, { waitUntil: 'networkidle' });
-    check('レベルが 14 個並ぶ', await page.locator('[data-level]').count(), 14);
+    check('レベルが 15 個並ぶ', await page.locator('[data-level]').count(), 15);
     check(
       '最初はどれもクリアしていない',
       await page.locator('[data-level][data-cleared]').count(),
@@ -605,10 +605,69 @@ async function main(): Promise<void> {
       1,
     );
 
+    // ---- 対話的 rebase ----
+    // -i は「打っても何も起きない」が要点。パネルで組み立ててから実行する
+    await page.goto(`${BASE}/levels/interactive/`, { waitUntil: 'networkidle' });
+    const todoInput = page.locator('#command-input');
+    await todoInput.waitFor({ timeout: 15_000 });
+    const beforeTodo = await page.locator('[data-commit]').count();
+    const sendTodo = async (line: string) => {
+      await todoInput.fill(line);
+      await todoInput.press('Enter');
+      await page.waitForTimeout(260);
+    };
+
+    await sendTodo('git rebase -i main');
+    check('計画のパネルが出る', await countEventually(page, '[data-pane="todo"]', 1), 1);
+    check('todo が 3 行並ぶ', await page.locator('[data-todo]').count(), 3);
+    check('打っただけではコミットが増えない', await page.locator('[data-commit]').count(), beforeTodo);
+    // パネルの中だけを数える。同じ文はターミナルにも読み上げ用の領域にも出る
+    check(
+      'まだ変わっていないと書いてある',
+      await page.locator('[data-pane="todo"]').getByText('まだ履歴は何も変わっていません').count(),
+      1,
+    );
+
+    // ボタンは todo コマンドを打つ ― ターミナルにも残る
+    await page.locator('[data-todo]').nth(1).getByRole('button', { name: 'squash' }).click();
+    await page.waitForTimeout(200);
+    check(
+      'squash がパネルに反映される',
+      await page.locator('[data-todo][data-todo-action="squash"]').count(),
+      1,
+    );
+    check(
+      'ボタンが打ったコマンドがターミナルに残る',
+      await countEventually(page, '.xterm-screen >> text=todo squash 2', 1),
+      1,
+    );
+
+    await page.locator('[data-todo]').nth(2).getByRole('button', { name: 'drop' }).click();
+    await page.waitForTimeout(200);
+    check(
+      'drop がパネルに反映される',
+      await page.locator('[data-todo][data-todo-action="drop"]').count(),
+      1,
+    );
+
+    await page.locator('[data-todo-run]').click();
+    check('実行するとパネルが消える', await countEventually(page, '[data-pane="todo"]', 0), 0);
+    check(
+      'まとめた 1 件がグラフに出る',
+      // <title>（ツールチップ）にも同じ文が入るので、描かれている text 要素だけ数える
+      await countEventually(
+        page,
+        '[data-testid="commit-graph"] text:text-is("ラッピングを直した + typo")',
+        1,
+      ),
+      1,
+    );
+    check('レベルをクリアできる', await countEventually(page, '[data-testid="cleared"]', 1), 1);
+
     // ---- 記事 ----
     // 記事とレベルは同じ id で結ばれている。行き来できることを通しで見る
     await page.goto(`${BASE}/docs/`, { waitUntil: 'networkidle' });
-    check('記事が 14 本並ぶ', await page.locator('[data-doc]').count(), 14);
+    check('記事が 15 本並ぶ', await page.locator('[data-doc]').count(), 15);
 
     await page.goto(`${BASE}/docs/conflict/`, { waitUntil: 'networkidle' });
     check('記事の見出しが出る', await page.locator('h1').count(), 1);

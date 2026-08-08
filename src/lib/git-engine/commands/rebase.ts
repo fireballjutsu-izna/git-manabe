@@ -1,4 +1,5 @@
 import { applyOnto, pauseWith, restore, snapshot } from '../apply';
+import { replayTodo } from '../interactive';
 import { hasFlag, type ParsedCommand } from '../parse';
 import {
   addCommit,
@@ -19,7 +20,7 @@ import {
   setHead,
   treeOf,
 } from '../state';
-import type { Commit, CommandResult, Pausing, RepoState } from '../types';
+import type { Commit, CommandResult, Pausing, RepoState, TodoItem } from '../types';
 
 /**
  * `git rebase <upstream>`
@@ -43,6 +44,14 @@ export function rebase(state: RepoState, command: ParsedCommand): CommandResult 
 
   if (hasFlag(command, '--abort')) return abort(state);
   if (hasFlag(command, '--continue')) return proceed(state);
+
+  if (state.todo) {
+    return fail(
+      state,
+      'いま書き換えの計画を立てているところです。',
+      'todo run で実行するか、git rebase --abort でやめてください。',
+    );
+  }
 
   if (state.pausing) {
     return fail(
@@ -102,6 +111,43 @@ export function rebase(state: RepoState, command: ParsedCommand): CommandResult 
   }
 
   const saved = snapshot(state);
+
+  /*
+   * -i は、ここで**止まる**。
+   *
+   * 本物もエディタを開くだけで、履歴にはまだ何も起きていない。
+   * 「計画を立ててから、まとめて実行する」のが -i の形なので、
+   * その 2 段構えをそのまま state に持たせる。
+   */
+  if (hasFlag(command, '-i', '--interactive')) {
+    const items: TodoItem[] = plain.map((c) => ({
+      id: c.id,
+      action: 'pick',
+      message: c.message,
+      original: c.message,
+    }));
+
+    return ok(
+      { ...state, todo: { onto, upstream: spec, items, saved } },
+      [
+        `${plain.length} 件をどう置き直すか、計画を立てます。まだ履歴は何も変わっていません。`,
+        '',
+        '計画:',
+        ...items.map((item, i) => `  ${i + 1}  pick   ${item.id}  ${item.message}`),
+        '',
+        '上のパネルのボタンか、todo コマンドで組み立てます。',
+        '  todo squash 2      2 行目を 1 つ上にまとめる',
+        '  todo drop 3        3 行目を落とす',
+        '  todo reword 1 <文> メッセージを書き換える',
+        '  todo up 2 / down 1 並べ替える',
+        '',
+        '決まったら todo run で実行します（本物ならエディタを閉じるところです）。',
+        'やめるなら git rebase --abort です。',
+      ],
+      ['repo'],
+    );
+  }
+
   // 置き直しは「積む先へいったん移ってから、1 つずつ当てる」
   const moved = moveTo(state, onto);
   return replay(moved, spec, plain.map((c) => c.id), [], saved, head, merges.length);
@@ -253,6 +299,28 @@ function proceed(state: RepoState): CommandResult {
     );
   }
 
+  /*
+   * 対話的 rebase の途中なら、続きも計画どおりに進める。
+   * 決着をつけた中身（ステージ）が、そのまままとめ途中の塊になる。
+   */
+  if (pausing.todo) {
+    const [applied, ...rest] = pausing.todo.items;
+    return replayTodo(
+      { ...state, pausing: null },
+      {
+        items: rest,
+        messages: pausing.todo.messages,
+        done: pausing.done,
+        from: pausing.saved.branchTarget ?? (headCommitId(state) as string),
+        upstream: '元の場所',
+        saved: pausing.saved,
+        resumedTree: state.stage,
+        leadId: pausing.todo.leadId,
+        justApplied: applied,
+      },
+    );
+  }
+
   const target = pausing.remaining[0];
   const original = state.commits[target];
   const parent = headCommitId(state) as string;
@@ -298,6 +366,18 @@ function proceed(state: RepoState): CommandResult {
  * 「やめても壊れない」ことが分かると、rebase は怖くなくなる。
  */
 function abort(state: RepoState): CommandResult {
+  // 計画を立てている段階でやめる。まだ何も起きていないので、消すだけで戻る
+  if (state.todo) {
+    return ok(
+      { ...state, todo: null },
+      [
+        '書き換えをやめました。',
+        '計画を立てていただけなので、履歴は最初から何も変わっていません。',
+      ],
+      ['repo'],
+    );
+  }
+
   const pausing = state.pausing;
   if (!pausing) return fail(state, 'いま rebase の途中ではありません。');
   if (pausing.kind !== 'rebase') {

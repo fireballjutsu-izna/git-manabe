@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { AreaPanes } from '@/components/graph/AreaPanes';
 import { CommitGraph } from '@/components/graph/CommitGraph';
+import { TodoPane } from '@/components/graph/TodoPane';
 import { CommandButtons } from '@/components/terminal/CommandButtons';
 import { Terminal } from '@/components/terminal/Terminal';
 import { findDoc } from '@/lib/docs';
@@ -125,6 +126,9 @@ function Runner({ level }: { level: NonNullable<ReturnType<typeof findLevel>> })
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_286px]">
         <div className="grid min-w-0 gap-4">
+          {/* 計画を立てている最中は、グラフより先に目に入る場所へ出す */}
+          <TodoPane />
+
           <CommitGraph state={state} />
 
           <div className="flex flex-wrap gap-2 text-xs">
