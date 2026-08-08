@@ -1,4 +1,4 @@
-import { hasConflictMarkers } from '@/lib/git-engine';
+import { hasConflictMarkers, headCommitId } from '@/lib/git-engine';
 import {
   areasClean,
   contains,
@@ -344,6 +344,84 @@ export const SCENARIOS: Scenario[] = [
       },
     ],
   },
+
+
+  {
+    id: 'secret',
+    title: '鍵を店先に出してしまった',
+    subtitle: '.gitignore は、もう追跡しているものには効かない',
+    intro:
+      '本店とやりとりするための鍵を書いたファイルを、うっかり記録に混ぜたまま送ってしまいました。実務でいちばん肝が冷える事故です。止め方と、止めても消えないものを、順に見ていきます。',
+    setup: [
+      'git init',
+      'touch order.txt',
+      'touch .env  HONTEN_KEY=ひみつの合鍵',
+      'git add .',
+      'git commit -m 開店',
+      'git remote add origin https://example.com/koeda.git',
+      'git push origin main',
+    ],
+    uses: ['ignore', 'areas', 'remote'],
+    steps: [
+      {
+        from: '先輩',
+        message:
+          'ちょっと待って。.env、本店に送るやつに混ざってない？ 中に合鍵書いてあるでしょ。まず追跡やめて。手元のファイルは消さないでね、使うから。',
+        task: '.env を追跡から外してください。手元のファイルは残したままです。',
+        check: (s) => s.stage['.env'] === undefined && s.work['.env'] !== undefined,
+        hints: [
+          '.gitignore に書くだけでは止まりません。もう追跡しているファイルには効かないからです。',
+          'git rm --cached .env です。',
+          '--cached を付けないとファイルごと消えます。手元では使い続けるので、付けてください。',
+        ],
+        par: 1,
+        suggest: { file: '.env' },
+      },
+      {
+        from: '先輩',
+        message: 'そのままだと、次に git add . したらまた入るよ。無視するって書いといて。',
+        task: '.gitignore を作って、.env を無視するように書いてください。',
+        check: (s) => (s.work['.gitignore'] ?? []).some((line) => line.trim() === '.env'),
+        hints: [
+          'touch .gitignore で作れます。',
+          'append .gitignore .env で 1 行足せます（edit は 1 行目を差し替えるので、こちらです）。',
+          '書けると、3 領域のパネルで .env が薄くなります ― Git が見ていない印です。',
+        ],
+        par: 2,
+        suggest: { file: '.gitignore' },
+      },
+      {
+        from: '先輩',
+        message: 'よし。それで記録して。',
+        task: '.gitignore を含めてコミットしてください。',
+        check: (s) => {
+          const head = headCommitId(s);
+          if (!head) return false;
+          const tree = s.commits[head].tree;
+          return tree['.env'] === undefined && tree['.gitignore'] !== undefined;
+        },
+        hints: [
+          'git add .gitignore です。.env はもうステージに載っています（外したことが載っています）。',
+          'そのあと git commit -m "..." です。',
+          'git add . でも構いません。.env は無視されるので入りません。',
+        ],
+        par: 2,
+      },
+      {
+        from: '先輩',
+        message:
+          'ここからが本題ね。いま消えたのは最新のコミットからだけ。git diff HEAD~1 HEAD を打ってみて ― .env が「消えた側」に出るでしょ。つまり 1 つ前にはまだ入ってる。push もしちゃってるから本店にも残ってる。履歴から本当に消す手はあるけど、それは全員の履歴を書き換える話で、消し終わるまで合鍵は有効なまま。だから先にやるのは合鍵の作り直しだよ。それが済めば、履歴に残ってるのはただの古い文字列。作り直しは僕がやっとくから、いまの状態を本店に送っといて。',
+        task: '本店へ送ってください。その前に git diff HEAD~1 HEAD を見ておくと、話が腑に落ちます。',
+        check: (s) => remoteTip(s, 'main') === tipOf(s, 'main'),
+        hints: [
+          'git diff HEAD~1 HEAD で、1 つ前に .env が入っていたことが確かめられます（手数には入りません）。',
+          '送るのは git push origin main です。',
+        ],
+        par: 1,
+      },
+    ],
+  },
+
 
   {
     id: 'showcase',

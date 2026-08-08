@@ -79,6 +79,8 @@ export function AreaPanes({
           label: f.path,
           badge: f.status === 'conflicted' ? '両方が変更' : f.status,
           alert: f.status === 'conflicted',
+          // Git が見ていないものは薄く。並んでいるのに関係ない、を色で言う
+          faded: f.status === 'ignored',
           hint: firstLine(state.work[f.path]),
         }))}
       />
@@ -99,7 +101,8 @@ export function AreaPanes({
         items={state.index.map((f) => ({
           key: f.path,
           label: f.path,
-          badge: 'staged',
+          // 「外す」もステージに載る。入れるのと見分けが付かないと、読み違える
+          badge: f.status === 'deleted' ? '追跡をやめる' : 'staged',
           hint: firstLine(state.stage[f.path]),
         }))}
       />
@@ -330,6 +333,8 @@ interface Item {
   alert?: boolean;
   /** ホバーで出す、中身の 1 行目。 */
   hint?: string;
+  /** Git が見ていないもの（ignored）。薄く出す。 */
+  faded?: boolean;
 }
 
 /**
@@ -404,6 +409,7 @@ function Pane({
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.2 }}
               className="flex items-center justify-between gap-2 overflow-hidden"
+              style={item.faded ? { opacity: 0.5 } : undefined}
             >
               <code className="truncate font-mono text-xs text-fg" title={item.hint}>
                 {item.label}

@@ -1,7 +1,8 @@
 import { defaultContent, hasConflictMarkers } from '../content';
+import { isIgnored } from '../ignore';
 import { fail, isTracked, ok, pathExists, requireRepo } from '../state';
 import type { ParsedCommand } from '../parse';
-import type { CommandResult, RepoState } from '../types';
+import type { CommandResult, FileStatus, RepoState } from '../types';
 
 /** 位置引数の 2 つ目以降を、そのまま 1 行として読む。 */
 function restText(command: ParsedCommand): string | undefined {
@@ -36,17 +37,75 @@ export function touch(state: RepoState, command: ParsedCommand): CommandResult {
   const text = restText(command);
   const content = text ? [text, '（ここに中身を書きます）'] : defaultContent(path);
 
+  /*
+   * .gitignore で無視されるファイルは untracked ではなく ignored。
+   * 本物の git status にも出てこない ―「Git はこれを見ていない」を、
+   * 状態の名前として持たせておく。
+   */
+  const ignored = isIgnored(state, path);
+  const status: FileStatus = ignored ? 'ignored' : 'untracked';
+
   return ok(
     {
       ...state,
       work: { ...state.work, [path]: content },
-      workingDir: [...state.workingDir, { path, status: 'untracked' }],
+      workingDir: [...state.workingDir, { path, status }],
     },
     [
       `${path} を作りました。`,
       `中身は ${content.length} 行です: ${content[0]}`,
-      'Git はまだこのファイルを知りません（untracked）。',
+      ignored
+        ? '.gitignore に当たるので、Git はこのファイルを見ません（ignored）。git add しても入りません。'
+        : 'Git はまだこのファイルを知りません（untracked）。',
     ],
+    ['workingDir'],
+  );
+}
+
+/**
+ * `append <path> <行>` — Git のコマンドではない。
+ *
+ * ファイルの末尾に 1 行足す。edit が 1 行目を差し替えるのに対し、こちらは積む。
+ * .gitignore のように**行を並べていく**ファイルのために置いている。
+ */
+export function append(state: RepoState, command: ParsedCommand): CommandResult {
+  const blocked = requireRepo(state);
+  if (blocked) return blocked;
+
+  const path = command.positional[0];
+  if (!path) {
+    return fail(state, 'ファイル名を書いてください。', '例: append .gitignore .env');
+  }
+
+  const line = restText(command);
+  if (!line) {
+    return fail(state, '足す行を書いてください。', `例: append ${path} .env`);
+  }
+
+  const before = state.work[path] ?? state.stage[path];
+  if (!before && !isTracked(state, path)) {
+    return fail(
+      state,
+      `${path} がありません。`,
+      `新しく作るなら touch ${path} ${line} です。`,
+    );
+  }
+
+  const after = [...(before ?? []), line];
+  const already = state.workingDir.some((f) => f.path === path);
+  const status: FileStatus = isTracked(state, path)
+    ? 'modified'
+    : isIgnored(state, path)
+      ? 'ignored'
+      : 'untracked';
+
+  return ok(
+    {
+      ...state,
+      work: { ...state.work, [path]: after },
+      workingDir: already ? state.workingDir : [...state.workingDir, { path, status }],
+    },
+    [`${path} に 1 行足しました: ${line}`, `いまは ${after.length} 行です。`],
     ['workingDir'],
   );
 }

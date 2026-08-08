@@ -12,6 +12,9 @@ import type { ConflictFile, Content, Tree } from './types';
 
 /** touch した直後の中身。2 行あると、差分が「変わった行」と「そのまま の行」に分かれて見える。 */
 export function defaultContent(path: string): Content {
+  // .gitignore は 1 行 1 パターンのファイル。既定の説明行を入れると、
+  // それ自体がパターンとして読まれてしまう
+  if (path === '.gitignore') return ['# Git に見せないもの'];
   return [path, '（ここに中身を書きます）'];
 }
 

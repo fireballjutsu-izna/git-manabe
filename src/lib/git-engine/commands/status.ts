@@ -1,3 +1,4 @@
+import { hasFlag, type ParsedCommand } from '../parse';
 import { currentBranchName, headCommitId, ok, pausingWays, refsAt, requireRepo } from '../state';
 import type { CommandResult, RepoState } from '../types';
 
@@ -7,7 +8,7 @@ import type { CommandResult, RepoState } from '../types';
  * 3 領域の現在地を言葉で出す。画面の 3 領域パネルと同じことを言うが、
  * 「本物の Git ならこう出る」を先に覚えてほしいので、両方置く。
  */
-export function status(state: RepoState): CommandResult {
+export function status(state: RepoState, command?: ParsedCommand): CommandResult {
   const blocked = requireRepo(state);
   if (blocked) return blocked;
 
@@ -52,7 +53,9 @@ export function status(state: RepoState): CommandResult {
   if (state.index.length > 0) {
     lines.push('');
     lines.push('コミットされる変更（ステージにあるもの）:');
-    for (const f of state.index) lines.push(`  ${f.path}`);
+    for (const f of state.index) {
+      lines.push(f.status === 'deleted' ? `  削除: ${f.path}` : `  ${f.path}`);
+    }
   }
 
   const modified = state.workingDir.filter((f) => f.status === 'modified');
@@ -69,7 +72,29 @@ export function status(state: RepoState): CommandResult {
     for (const f of untracked) lines.push(`  ${f.path}`);
   }
 
-  if (state.index.length === 0 && state.workingDir.length === 0) {
+  /*
+   * 無視しているファイル。
+   *
+   * 本物は --ignored を付けないと一覧を出さないが、件数だけは伝える ―
+   * 「置いたはずのファイルが status に出てこない」で戸惑うのを避けるため。
+   */
+  const ignored = state.workingDir.filter((f) => f.status === 'ignored');
+  if (ignored.length > 0) {
+    lines.push('');
+    if (command && hasFlag(command, '--ignored')) {
+      lines.push('.gitignore で無視しているファイル:');
+      for (const f of ignored) lines.push(`  ${f.path}`);
+      lines.push('Git はこれらを見ていません。git add . でも入りません。');
+    } else {
+      lines.push(
+        `.gitignore で無視しているファイルが ${ignored.length} 件あります（git status --ignored で一覧）。`,
+      );
+    }
+  }
+
+  const nothing =
+    state.index.length === 0 && state.workingDir.every((f) => f.status === 'ignored');
+  if (nothing) {
     lines.push('');
     lines.push('変更はありません。作業ディレクトリもステージも空です。');
   }
