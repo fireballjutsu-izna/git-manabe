@@ -40,6 +40,13 @@ const SOLUTIONS: Record<string, string[][]> = {
     ['git add .gitignore', 'git commit -m ".env を追跡から外した"'],
     ['git push origin main'],
   ],
+  resend: [
+    ['git rebase -i main'],
+    ['todo squash 2', 'todo squash 3'],
+    ['todo run'],
+    ['git push --force-with-lease origin poster'],
+    ['git switch main', 'git merge poster'],
+  ],
   showcase: [
     // cherry-pick の id は状態から引くので、ここでは印だけ置く
     ['<cherry-pick:傷んだ葉を直した>'],

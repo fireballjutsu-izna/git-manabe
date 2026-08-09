@@ -98,6 +98,79 @@ describe('git push', () => {
   });
 });
 
+/**
+ * 書き換えたあとの push。
+ *
+ * ここは案内を間違えると害が大きい ―
+ * 「pull しろ」と言われて pull すると、捨てたはずの古い版がまた入ってくる。
+ * 断り方と、押し出し方の 2 つを固定しておく。
+ */
+describe('履歴を書き換えたあとの push', () => {
+  /** push 済みの枝を rebase -i でまとめ直した形。 */
+  const rewritten = () =>
+    play([
+      ...PUSHED,
+      'git switch -c poster',
+      'touch p.txt',
+      'git add .',
+      'git commit -m 作った',
+      'edit p.txt 直した',
+      'git add .',
+      'git commit -m 誤字',
+      'git push origin poster',
+      'git rebase -i main',
+      'todo squash 2',
+      'todo run',
+    ]);
+
+  it('そのままの push は断る', () => {
+    expect(run(rewritten(), 'git push origin poster').error).toContain(
+      'あなたが持っていないコミットがあります',
+    );
+  });
+
+  it('向こうが動いていないなら、pull ではなく押し出せと言う', () => {
+    const text = run(rewritten(), 'git push origin poster').log.join('\n');
+    expect(text).toContain('自分で履歴を書き換えたぶんです');
+    expect(text).toContain('--force-with-lease');
+    expect(text).not.toContain('git pull');
+  });
+
+  it('--force-with-lease なら通る', () => {
+    const result = run(rewritten(), 'git push --force-with-lease origin poster');
+
+    expect(result.error).toBeUndefined();
+    expect(findRemote(result.state, 'origin')?.branches.find((b) => b.name === 'poster')?.target).toBe(
+      localTip(result.state, 'poster'),
+    );
+    expect(result.log.join('\n')).toContain('どこからも辿れなくなります');
+  });
+
+  it('向こうが動いていたら、--force-with-lease は止まる', () => {
+    // 同僚が先に push した ＝ こちらが最後に見た位置とずれる
+    const moved = play(['teammate 1'], rewritten());
+    const result = run(moved, 'git push --force-with-lease origin poster');
+
+    expect(result.error).toContain('最後に見たときから動いています');
+    expect(result.log.join('\n')).toContain('git fetch');
+  });
+
+  it('--force は確かめずに上書きする', () => {
+    const moved = play(['teammate 1'], rewritten());
+    const result = run(moved, 'git push --force origin poster');
+
+    expect(result.error).toBeUndefined();
+    expect(result.log.join('\n')).toContain('確かめずに上書きしました');
+  });
+
+  it('相手が進んだだけのときは、これまでどおり pull と言う', () => {
+    const behind = play([...PUSHED, 'teammate 1', 'git commit -m 手元の続き']);
+    const text = run(behind, 'git push origin main').log.join('\n');
+    expect(text).toContain('git pull');
+    expect(text).not.toContain('--force-with-lease');
+  });
+});
+
 describe('teammate（このサイト独自）', () => {
   it('向こうだけが進み、こちらのグラフは変わらない', () => {
     const before = play(PUSHED);

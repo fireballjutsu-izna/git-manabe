@@ -82,6 +82,21 @@ export function rebase(state: RepoState, command: ParsedCommand): CommandResult 
     return fail(state, `${spec} は、いまいるコミットそのものです。`);
   }
 
+  /*
+   * -i は、ここで**止まる**。
+   *
+   * 本物もエディタを開くだけで、履歴にはまだ何も起きていない。
+   * 「計画を立ててから、まとめて実行する」のが -i の形なので、
+   * その 2 段構えをそのまま state に持たせる。
+   *
+   * 分かれていなくても開く ― 実務でいちばん多い使い方が
+   * 「push する前に、自分のコミットだけを整える」だから。
+   * git rebase -i HEAD~3 のような呼び方も、これで通る。
+   */
+  if (hasFlag(command, '-i', '--interactive')) {
+    return plan(state, spec, onto, head);
+  }
+
   // 相手が自分の祖先 ＝ すでにその上にいる。置き直す意味がない
   if (isAncestor(state, onto, head)) {
     return ok(
@@ -112,45 +127,59 @@ export function rebase(state: RepoState, command: ParsedCommand): CommandResult 
 
   const saved = snapshot(state);
 
-  /*
-   * -i は、ここで**止まる**。
-   *
-   * 本物もエディタを開くだけで、履歴にはまだ何も起きていない。
-   * 「計画を立ててから、まとめて実行する」のが -i の形なので、
-   * その 2 段構えをそのまま state に持たせる。
-   */
-  if (hasFlag(command, '-i', '--interactive')) {
-    const items: TodoItem[] = plain.map((c) => ({
-      id: c.id,
-      action: 'pick',
-      message: c.message,
-      original: c.message,
-    }));
-
-    return ok(
-      { ...state, todo: { onto, upstream: spec, items, saved } },
-      [
-        `${plain.length} 件をどう置き直すか、計画を立てます。まだ履歴は何も変わっていません。`,
-        '',
-        '計画:',
-        ...items.map((item, i) => `  ${i + 1}  pick   ${item.id}  ${item.message}`),
-        '',
-        '上のパネルのボタンか、todo コマンドで組み立てます。',
-        '  todo squash 2      2 行目を 1 つ上にまとめる',
-        '  todo drop 3        3 行目を落とす',
-        '  todo reword 1 <文> メッセージを書き換える',
-        '  todo up 2 / down 1 並べ替える',
-        '',
-        '決まったら todo run で実行します（本物ならエディタを閉じるところです）。',
-        'やめるなら git rebase --abort です。',
-      ],
-      ['repo'],
-    );
-  }
-
   // 置き直しは「積む先へいったん移ってから、1 つずつ当てる」
   const moved = moveTo(state, onto);
   return replay(moved, spec, plain.map((c) => c.id), [], saved, head, merges.length);
+}
+
+/**
+ * `git rebase -i` の計画を開く。
+ *
+ * 分岐点から HEAD までを todo に並べるだけ。まだ何も置き直さない。
+ */
+function plan(state: RepoState, spec: string, onto: string, head: string): CommandResult {
+  /*
+   * 積む先（onto）と、書き換える範囲の起点（base）は別物。
+   * 分かれているときは onto が相手の先端、base はその分岐点になる。
+   * 分かれていなければ両方とも同じところを指す。
+   */
+  const base = mergeBase(state, head, onto);
+  const chain = chainToReplay(state, head, base).filter((c) => c.parents.length === 1);
+
+  if (chain.length === 0) {
+    return fail(
+      state,
+      `${spec} との間に、書き換えられるコミットがありません。`,
+      'マージコミットは対象外です（本物の git rebase も既定では落とします）。',
+    );
+  }
+
+  const items: TodoItem[] = chain.map((c) => ({
+    id: c.id,
+    action: 'pick',
+    message: c.message,
+    original: c.message,
+  }));
+
+  return ok(
+    { ...state, todo: { onto, upstream: spec, items, saved: snapshot(state) } },
+    [
+      `${chain.length} 件をどう置き直すか、計画を立てます。まだ履歴は何も変わっていません。`,
+      '',
+      '計画:',
+      ...items.map((item, i) => `  ${i + 1}  pick   ${item.id}  ${item.message}`),
+      '',
+      '上のパネルのボタンか、todo コマンドで組み立てます。',
+      '  todo squash 2      2 行目を 1 つ上にまとめる',
+      '  todo drop 3        3 行目を落とす',
+      '  todo reword 1 <文> メッセージを書き換える',
+      '  todo up 2 / down 1 並べ替える',
+      '',
+      '決まったら todo run で実行します（本物ならエディタを閉じるところです）。',
+      'やめるなら git rebase --abort です。',
+    ],
+    ['repo'],
+  );
 }
 
 /**

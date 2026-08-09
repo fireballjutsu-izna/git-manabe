@@ -102,6 +102,46 @@ describe('-i は計画を立てるだけ', () => {
   it('計画の外で todo を打つと断る', () => {
     expect(run(play(THREE), 'todo run').error).toContain('計画を立てているところではありません');
   });
+
+  /*
+   * 実務でいちばん多い使い方は「push する前に、自分のコミットだけを整える」。
+   * このとき枝は分かれていないので、素の rebase なら「すでに上にいます」で終わる。
+   * -i はそこでも開かないと使いものにならない。
+   */
+  it('分かれていなくても開ける', () => {
+    const state = play([
+      'git init',
+      'git commit -m 根',
+      'git switch -c feature',
+      'git commit -m 一つ目',
+      'git commit -m 二つ目',
+    ]);
+
+    // 素の rebase は、置き直すものが無いと言う
+    expect(run(state, 'git rebase main').log.join('\n')).toContain('すでに main の上にいます');
+
+    // -i は開く
+    const opened = run(state, 'git rebase -i main');
+    expect(opened.error).toBeUndefined();
+    expect(opened.state.todo?.items.map((i) => i.message)).toEqual(['一つ目', '二つ目']);
+  });
+
+  it('HEAD~2 のような指定でも開ける', () => {
+    const state = play([
+      'git init',
+      'git commit -m 根',
+      'git commit -m 一つ目',
+      'git commit -m 二つ目',
+    ]);
+    const opened = run(state, 'git rebase -i HEAD~2');
+    expect(opened.error).toBeUndefined();
+    expect(opened.state.todo?.items.map((i) => i.message)).toEqual(['一つ目', '二つ目']);
+  });
+
+  it('書き換えるものが無ければ断る', () => {
+    const state = play(['git init', 'git commit -m 根']);
+    expect(run(state, 'git rebase -i HEAD').error).toContain('いまいるコミットそのもの');
+  });
 });
 
 describe('計画を組み立てる', () => {
