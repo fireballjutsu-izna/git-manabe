@@ -46,7 +46,7 @@ Git が見ているのは 3 つのコミットだからです。
 
 たとえば `a.txt` が `ours` と `theirs` で違っていたとします。
 どちらが変えたのでしょうか。両方かもしれません。片方だけかもしれません。
-`base` と比べて初めて、それが判ります。
+`base` と比べて初めて、それが分かります。
 
 - `base` と `ours` が同じ → 変えたのは `theirs`。相手の側を採る
 - `base` と `theirs` が同じ → 変えたのは `ours`。自分の側を採る
@@ -83,7 +83,8 @@ git log --graph
 
 ```
 *   f32d61f (HEAD -> main) Merge feature into main
-|* | e52d4bf 幹の上
+|\
+* | e52d4bf 幹の上
 | * ea2d53c (feature) 枝の上
 |/
 *   eb2d556 根

@@ -5,7 +5,7 @@ import { pageMetadata } from '@/lib/seo';
 export const metadata = pageMetadata({
   title: '記事',
   description:
-    '3 領域・ブランチと HEAD・merge とコンフリクト・reset の 3 モード・rebase・reflog・リモートまで、Git の仕組みを 1 項目ずつ日本語で読みます。',
+    '3 領域と diff・.gitignore と出してしまった秘密・ブランチと HEAD・merge とコンフリクト・reset の 3 モード・rebase と対話的 rebase・reflog・リモートまで、Git の仕組みを 1 項目ずつ日本語で読みます。',
   path: '/docs/',
 });
 

@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { LEVELS } from '@/lib/levels';
+import { SCENARIOS } from '@/lib/scenarios';
 import { SITE } from '@/lib/site';
 
 export default function HomePage() {
@@ -47,8 +49,8 @@ export default function HomePage() {
         </Link>
       </div>
       <p className="mt-3 text-xs text-muted">
-        レベルと記事はどちらも 13 個で、同じ順・同じ題です。
-        シナリオは、それを組み合わせた実務の 1 場面を一続きに解きます。
+        レベルと記事はどちらも {LEVELS.length} 個で、同じ順・同じ題です。
+        シナリオ {SCENARIOS.length} 本は、それを組み合わせた実務の 1 場面を一続きに解きます。
         クリアの記録と連続日数は、この端末の中だけに残ります。
       </p>
 
@@ -127,7 +129,15 @@ export default function HomePage() {
               git stash
             </code>
             <span className="text-sm">
-              コミットせずに作業を脇へどける。唯一、グラフが変わらないコマンド
+              コミットせずに 3 領域を空にする。履歴には跡が残らない
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <code className="mt-0.5 shrink-0 rounded border border-line bg-inset px-1.5 font-mono text-xs text-muted">
+              git diff
+            </code>
+            <span className="text-sm">
+              どこが変わったかを行で見る。3 領域のどことどこを比べるかで、引数が変わる
             </span>
           </li>
           <li className="flex gap-3">
@@ -140,7 +150,8 @@ export default function HomePage() {
           </li>
         </ul>
         <p className="mt-5 text-sm text-muted">
-          cherry-pick・リモート（push / fetch / pull）・コンフリクトの解決も使えます。
+          cherry-pick・tag・リモート（push / fetch / pull）・行単位のコンフリクトの解決・
+          .gitignore と git rm --cached・対話的 rebase（git rebase -i）・git log --graph も使えます。
         </p>
       </section>
     </div>

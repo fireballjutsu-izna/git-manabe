@@ -28,8 +28,12 @@ const PAGES = [
   '/start/',
   '/docs/',
   '/docs/areas/',
-  // 表・コードブロック・記事内リンクがいちばん多い 1 本を代表に選ぶ
+  // 表・コードブロック・記事内リンクが多いものを代表に選ぶ。
+  // 見出しの無い表は空の <th> になって読み上げに乗らないので、表の多い記事は必ず見る
   '/docs/reset-modes/',
+  '/docs/conflict/',
+  '/docs/interactive/',
+  '/docs/branch/',
   '/levels/',
   '/scenarios/',
   '/scenarios/hotfix/',
