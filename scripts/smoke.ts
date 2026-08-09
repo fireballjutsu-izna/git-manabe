@@ -605,6 +605,37 @@ async function main(): Promise<void> {
       1,
     );
 
+    // ---- git log --graph ----
+    // 画面のグラフと同じ履歴が、ターミナルにも出ること
+    await page.goto(`${BASE}/sandbox/`, { waitUntil: 'networkidle' });
+    const graphInput = page.locator('#command-input');
+    await graphInput.waitFor({ timeout: 15_000 });
+    for (const line of [
+      'git init',
+      'git commit -m 根',
+      'git switch -c feature',
+      'git commit -m 枝の上',
+      'git switch main',
+      'git commit -m 幹の上',
+      'git merge feature',
+      'git log --graph',
+    ]) {
+      await graphInput.fill(line);
+      await graphInput.press('Enter');
+      await page.waitForTimeout(200);
+    }
+
+    check(
+      'ターミナルにも枝分かれが出る',
+      await countEventually(page, '.xterm-screen >> text=|\\', 1),
+      1,
+    );
+    check(
+      '合流も出る',
+      await countEventually(page, '.xterm-screen >> text=|/', 1),
+      1,
+    );
+
     // ---- 対話的 rebase ----
     // -i は「打っても何も起きない」が要点。パネルで組み立ててから実行する
     await page.goto(`${BASE}/levels/interactive/`, { waitUntil: 'networkidle' });
