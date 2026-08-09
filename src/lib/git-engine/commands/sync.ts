@@ -1,4 +1,4 @@
-import type { ParsedCommand } from '../parse';
+import { hasFlag, type ParsedCommand } from '../parse';
 import {
   ancestorsOf,
   currentBranchName,
@@ -21,7 +21,15 @@ import { merge } from './merge';
  *
  * **早送りにならない push は断られる。**これが push でいちばん出会うエラーで、
  * 「向こうに、こちらの知らないコミットがある」という意味しかない。
- * 直し方は 1 つ ― 先に pull して、相手のぶんを取り込んでから送る。
+ * 直し方はふつう 1 つ ― 先に pull して、相手のぶんを取り込んでから送る。
+ *
+ * ただし rebase のあとだけは事情が違う。**自分で履歴を書き換えたのだから、
+ * 向こうのほうが古い**。ここでだけ、押し出すための指定がある:
+ *
+ *   --force              問答無用で上書きする
+ *   --force-with-lease   「自分が最後に見たときから向こうが動いていなければ」上書きする
+ *
+ * 後者を使う。前者は、間に誰かが push していたらそれを消してしまう。
  */
 export function push(state: RepoState, command: ParsedCommand): CommandResult {
   const blocked = requireRepo(state);
@@ -46,13 +54,57 @@ export function push(state: RepoState, command: ParsedCommand): CommandResult {
     return ok(state, [`${target.name}/${branch} は、すでに同じところを指しています。`], []);
   }
 
+  const force = hasFlag(command, '--force', '-f');
+  const lease = hasFlag(command, '--force-with-lease');
+  const notes: string[] = [];
+
   // 向こうの先端がこちらから辿れない ＝ こちらの知らないコミットを持っている
   if (theirs && !isAncestor(state, theirs, local)) {
-    return fail(
-      state,
-      `${target.name} の ${branch} には、あなたが持っていないコミットがあります。`,
-      `先に git pull ${target.name} ${branch} で取り込んでから、送り直してください。`,
+    if (!force && !lease) {
+      return fail(
+        state,
+        `${target.name} の ${branch} には、あなたが持っていないコミットがあります。`,
+        rewrote(state, target.name, branch, theirs)
+          ? `向こうは動いていないので、これは自分で履歴を書き換えたぶんです。git push --force-with-lease ${target.name} ${branch} で押し出せます。`
+          : `先に git pull ${target.name} ${branch} で取り込んでから、送り直してください。`,
+      );
+    }
+
+    /*
+     * --force-with-lease の「lease（借り）」。
+     *
+     * 自分が最後に見た向こうの位置（origin/xxx）と、向こうの実際の位置を比べる。
+     * ずれていれば、自分が見ていないあいだに誰かが push している ―
+     * そこへ --force をかけると、その人の作業が消える。だからここで止める。
+     */
+    if (lease && !force) {
+      const seen = state.remoteBranches.find(
+        (r) => r.name === trackingName(target.name, branch),
+      )?.target;
+      if (seen !== theirs) {
+        return fail(
+          state,
+          `${target.name} の ${branch} は、あなたが最後に見たときから動いています。`,
+          `いま押し出すと、その変更が消えます。先に git fetch ${target.name} で確かめてください。`,
+        );
+      }
+    }
+
+    // 向こうにしかないコミットは、この push でどこからも辿れなくなる
+    const losing = [...ancestorsOf({ ...state, commits: target.commits }, theirs)].filter(
+      (id) => !ancestorsOf(state, local).has(id),
     );
+    notes.push(
+      force && !lease
+        ? '--force なので、向こうの状態を確かめずに上書きしました。'
+        : '最後に見たときから向こうが動いていなかったので、押し出しました。',
+    );
+    if (losing.length > 0) {
+      notes.push(
+        `向こうにあった ${losing.length} 件は、これでどこからも辿れなくなります（書き換える前の版です）。`,
+      );
+    }
+    notes.push('ほかの人がこの枝を持っていると、その手元と食い違います。共有前だけにしてください。');
   }
 
   // 向こうに足りないコミットだけを複製する
@@ -83,9 +135,25 @@ export function push(state: RepoState, command: ParsedCommand): CommandResult {
       `${sending.length} 件を ${target.name} の ${branch} へ送りました。`,
       `${trackingName(target.name, branch)} も一緒に動きました ― 送った先が分かっているからです。`,
       ...(theirs ? [] : [`${target.name} に ${branch} を新しく作りました。`]),
+      ...notes,
     ],
     ['repo'],
   );
+}
+
+/**
+ * 食い違いの原因が「自分が書き換えたから」か、「向こうが進んだから」か。
+ *
+ * 断り文句の出し分けに使う。案内を間違えると害が大きい ―
+ * 書き換えたあとに pull すると、捨てたはずの古い版がまた入ってくる。
+ *
+ * 見分け方は 1 つで足りる。**自分が最後に見た向こうの位置**（origin/xxx）と、
+ * 向こうの実際の位置が同じなら、動いたのはこちらだけ ＝ 自分の書き換え。
+ * ずれていれば、誰かが push している ＝ pull が要る。
+ */
+function rewrote(state: RepoState, remote: string, branch: string, theirs: string): boolean {
+  const seen = state.remoteBranches.find((r) => r.name === trackingName(remote, branch))?.target;
+  return seen === theirs;
 }
 
 /**

@@ -291,7 +291,26 @@ export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?
         const theirs = state.remotes[0].branches.find((b) => b.name === branch);
         const known = state.remoteBranches.find((t) => t.name === `${remoteName}/${branch}`);
 
-        if (!theirs) {
+        /*
+         * 向こうの先端がこちらから辿れない ＝ 自分で書き換えたあと。
+         * ここで普通の push を出しても必ず断られるので、押し出すほうを出す。
+         */
+        const rewritten =
+          theirs !== undefined && !isAncestor(state, theirs.target, head) && known?.target === theirs.target;
+
+        if (rewritten) {
+          now({
+            label: `git push --force-with-lease ${remoteName} ${branch}`,
+            line: `git push --force-with-lease ${remoteName} ${branch}`,
+            hint: '書き換えたぶんを押し出す',
+            weight: 0,
+          });
+          more({
+            label: `git push ${remoteName} ${branch}`,
+            line: `git push ${remoteName} ${branch}`,
+            hint: 'そのままだと断られる',
+          });
+        } else if (!theirs) {
           now({
             label: `git push ${remoteName} ${branch}`,
             line: `git push ${remoteName} ${branch}`,

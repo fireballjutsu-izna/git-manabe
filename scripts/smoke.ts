@@ -718,7 +718,7 @@ async function main(): Promise<void> {
 
     // ---- シナリオ ----
     await page.goto(`${BASE}/scenarios/`, { waitUntil: 'networkidle' });
-    check('シナリオが 7 本並ぶ', await page.locator('[data-scenario]').count(), 7);
+    check('シナリオが 8 本並ぶ', await page.locator('[data-scenario]').count(), 8);
     check(
       '最初はどれも片付いていない',
       await page.locator('[data-scenario][data-done]').count(),
@@ -827,6 +827,41 @@ async function main(): Promise<void> {
     await sendSecret('git push origin main');
     check(
       '秘密の回も最後まで解ける',
+      await countEventually(page, '[data-testid="finished"]', 1),
+      1,
+    );
+
+    // ---- 書き換えたあとの push ----
+    // 「そのままだと断られる → --force-with-lease で押し出す」を通しで見る
+    await page.goto(`${BASE}/scenarios/resend/`, { waitUntil: 'networkidle' });
+    const resendInput = page.locator('#command-input');
+    await resendInput.waitFor({ timeout: 15_000 });
+    const sendResend = async (line: string) => {
+      await resendInput.fill(line);
+      await resendInput.press('Enter');
+      await page.waitForTimeout(260);
+    };
+
+    await sendResend('git rebase -i main');
+    check('分かれていなくても計画が開く', await countEventually(page, '[data-pane="todo"]', 1), 1);
+
+    await sendResend('todo squash 2');
+    await sendResend('todo squash 3');
+    await sendResend('todo run');
+    check('まとめ終わるとパネルが消える', await countEventually(page, '[data-pane="todo"]', 0), 0);
+
+    await sendResend('git push origin poster');
+    check(
+      'そのままの push は断られる',
+      await countEventually(page, '.xterm-screen >> text=自分で履歴を書き換えたぶんです', 1),
+      1,
+    );
+
+    await sendResend('git push --force-with-lease origin poster');
+    await sendResend('git switch main');
+    await sendResend('git merge poster');
+    check(
+      '出し直しの回も最後まで解ける',
       await countEventually(page, '[data-testid="finished"]', 1),
       1,
     );

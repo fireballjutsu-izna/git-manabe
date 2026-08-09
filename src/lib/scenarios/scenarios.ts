@@ -424,6 +424,98 @@ export const SCENARIOS: Scenario[] = [
 
 
   {
+    id: 'resend',
+    title: '貼り紙を出し直す',
+    subtitle: '指摘に応えて履歴を書き換え、押し出す',
+    intro:
+      '本店に送ったあとで、先輩から「コミットの分け方を直して」と言われました。すでに送ったものを書き換えると、そのままでは push が断られます。なぜ断られるのか、どう押し出すのかを順に見ていきます。',
+    setup: [
+      'git init',
+      'touch shop.txt',
+      'git add .',
+      'git commit -m 開店',
+      'git remote add origin https://example.com/koeda.git',
+      'git push origin main',
+      'git switch -c poster',
+      'touch poster.txt',
+      'git add .',
+      'git commit -m 貼り紙を作った',
+      'edit poster.txt 文字を大きく',
+      'git add .',
+      'git commit -m 文字が小さかった',
+      'edit poster.txt 春の新作フェア',
+      'git add .',
+      'git commit -m 誤字',
+      'git push origin poster',
+    ],
+    uses: ['interactive', 'remote', 'rebase'],
+    steps: [
+      {
+        from: '先輩',
+        message:
+          '貼り紙、見たよ。中身はいいんだけど、コミットが 3 つに割れてるね。「作った」「文字が小さかった」「誤字」って、あとから読むと 3 回やり直したようにしか見えない。1 つにまとめて出し直してくれる？',
+        task: 'main の上に置き直す計画を開いてください。まだ実行はしません。',
+        check: (s) => s.todo !== null,
+        hints: [
+          '書き換える前に計画を立てられる rebase があります。',
+          'git rebase -i main です。打っても、まだ履歴は何も変わりません。',
+        ],
+        par: 1,
+      },
+      {
+        from: '先輩',
+        message: '2 つ目と 3 つ目を、1 つ目にまとめて。落とすんじゃなくて、中身は残してね。',
+        task: '2 行目と 3 行目を squash にしてください。',
+        check: (s) =>
+          s.todo !== null &&
+          s.todo.items.length === 3 &&
+          s.todo.items[1].action === 'squash' &&
+          s.todo.items[2].action === 'squash',
+        hints: [
+          '上のパネルで、2 行目と 3 行目の squash を押します。',
+          'todo squash 2 と todo squash 3 でも同じことができます。',
+          'squash は「1 つ上にまとめる」なので、1 行目には付けられません。',
+        ],
+        par: 2,
+      },
+      {
+        from: '先輩',
+        message: 'よし、それで実行して。',
+        task: '計画を実行してください。',
+        check: (s) => s.todo === null && s.pausing === null && depth(s, 'poster') === 2,
+        hints: [
+          'パネルの「実行する」か、todo run です。',
+          '本物なら、ここでエディタを閉じるところです。',
+          '中身は 3 つぶん全部入ったまま、コミットが 1 つになります。',
+        ],
+        par: 1,
+      },
+      {
+        from: '先輩',
+        message:
+          'じゃあ本店に送り直して。たぶん一回断られるよ。なぜだと思う？ ― 向こうにあるのは書き換える前の 3 つで、こっちの 1 つからは辿れない。Git から見ると「あなたが持っていないコミットがある」んだ。',
+        task: '本店の poster を、書き換えたもので上書きしてください。',
+        check: (s) => remoteTip(s, 'poster') === tipOf(s, 'poster'),
+        hints: [
+          'まず git push origin poster を打ってみてください。断られます。',
+          '自分で書き換えたのだから、押し出す指定が要ります。',
+          'git push --force-with-lease origin poster です。',
+          '--force ではなく --force-with-lease を使います。間に誰かが push していたら、その人の作業を消さずに止まってくれます。',
+        ],
+        par: 1,
+      },
+      {
+        from: '店長',
+        message: 'ありがとう、読みやすくなった。店頭にも出しておいて。',
+        task: 'main へ戻り、poster を取り込んでください。',
+        check: (s) => on(s, 'main') && contains(s, 'main', 'poster'),
+        hints: ['git switch main で戻ります。', 'git merge poster です。'],
+        par: 2,
+      },
+    ],
+  },
+
+  {
     id: 'showcase',
     title: '展示会の支度',
     subtitle: '必要な修正だけを持っていく',
