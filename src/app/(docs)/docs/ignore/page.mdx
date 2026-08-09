@@ -74,8 +74,8 @@ secrets/        そのディレクトリの下ぜんぶ
 git rm --cached .env
 git commit -m ".env を外した"
 
-git diff HEAD~1 HEAD     # ← .env が消えた差分が見える
-git show HEAD~1          # ← 1 つ前のコミットには、まだ中身が入っている
+git diff HEAD~1 HEAD     # ← .env が「消えた側」に出る
+                         #    つまり、1 つ前にはまだ入っていたということ
 ```
 
 コミットは積み重ねであって、上書きではありません。
