@@ -79,12 +79,12 @@ export function rm(state: RepoState, command: ParsedCommand): CommandResult {
 
   if (stillInHistory.length > 0) {
     lines.push('');
-    lines.push('ただし、これで消えるのは**これ以降**だけです。');
+    lines.push('ただし、これで消えるのは、これ以降のコミットからだけです。');
     lines.push(
       `過去のコミットには ${stillInHistory.join(', ')} がまだ入っています（git diff HEAD~1 や git log で辿れます）。`,
     );
     lines.push(
-      '秘密の値を出してしまったなら、履歴から消す前にまず**その値を作り直して**ください。それがいちばん確実です。',
+      '秘密の値を出してしまったなら、履歴から消す前に、まずその値を作り直してください。それがいちばん確実です。',
     );
   }
 

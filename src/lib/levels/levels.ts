@@ -56,7 +56,7 @@ export const LEVELS: Level[] = [
       'touch .gitignore で作り、append .gitignore .env で 1 行足せます。',
       'git rm --cached .env で追跡から外します。--cached を付けると、手元のファイルは残ります。',
       'あとは git add .gitignore と git commit です。',
-      '終わったら git diff HEAD~1 HEAD を見てください。1 つ前のコミットには、まだ .env が入っています。',
+      '終わったら git diff HEAD~1 HEAD を見てください（HEAD~1 は「1 つ前のコミット」です）。1 つ前のコミットには、まだ .env が入っています。',
     ],
   },
   {
