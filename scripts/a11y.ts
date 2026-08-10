@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { chromium, type Browser, type Page } from 'playwright';
 import { serveStatic } from './serve.ts';
 
@@ -12,7 +12,7 @@ import { serveStatic } from './serve.ts';
  * 画面を見ている限り気づけない種類の壊れ方を捕まえる。
  *
  * 3 本立て:
- *   1. axe … WCAG の機械で判る部分（両テーマ・主要ページ・状態変化後）
+ *   1. axe … WCAG の機械で判る部分（両テーマ・全ページ・状態変化後）
  *   2. キーボード … トラップが無いか、輪が見えるか、スキップできるか
  *   3. 読み上げ … ターミナルの出力が文章として流れてくるか
  */
@@ -23,39 +23,50 @@ const AXE = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 const PORT = 4340;
 const ROOT = join(process.cwd(), 'out');
 const BASE = `http://127.0.0.1:${PORT}/git-manabe`;
-const PAGES = [
-  '/',
-  '/start/',
-  '/docs/',
-  '/docs/areas/',
-  // 表・コードブロック・記事内リンクが多いものを代表に選ぶ。
-  // 見出しの無い表は空の <th> になって読み上げに乗らないので、表の多い記事は必ず見る
-  '/docs/reset-modes/',
-  '/docs/conflict/',
-  '/docs/interactive/',
-  '/docs/branch/',
-  '/levels/',
-  '/scenarios/',
-  '/scenarios/hotfix/',
-  '/sandbox/',
-  '/levels/conflict/',
-];
+
+/** 同時に開くページ数。1 枚ずつ開くと 90 枚で 3 分を超える。 */
+const LANES = 4;
+
+/**
+ * 書き出した out/ に在るページ、全部。
+ *
+ * 代表を手で選んでいた時期があったが、記事を足すたびに同じ抜け方をした ―
+ * 見出しの無い表が 8 本たまっていたのに、その記事がどれも一覧に無かった。
+ * 一覧を書かなければ、書き忘れることもない。links と同じ考え方にする。
+ */
+function routes(dir: string = ROOT): string[] {
+  const out: string[] = [];
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) out.push(...routes(path));
+    else if (name === 'index.html') {
+      const rel = relative(ROOT, dir);
+      out.push(rel ? `/${rel}/` : '/');
+    }
+  }
+  return out.sort();
+}
+
+const PAGES = routes();
 
 const failures: string[] = [];
 
-function check(label: string, actual: unknown, expected: unknown): void {
+/** 1 件ぶんの判定。落ちたぶんを控えて、表示する 1 行を返す。 */
+function verdict(label: string, actual: unknown, expected: unknown): string {
   const ok = JSON.stringify(actual) === JSON.stringify(expected);
-  console.log(
-    `${ok ? '  ok  ' : ' FAIL '} ${label}${ok ? '' : `  期待: ${JSON.stringify(expected)} / 実際: ${JSON.stringify(actual)}`}`,
-  );
   if (!ok) failures.push(label);
+  return `${ok ? '  ok  ' : ' FAIL '} ${label}${ok ? '' : `  期待: ${JSON.stringify(expected)} / 実際: ${JSON.stringify(actual)}`}`;
+}
+
+function check(label: string, actual: unknown, expected: unknown): void {
+  console.log(verdict(label, actual, expected));
 }
 
 interface AxeResult {
   violations: { id: string; impact: string; help: string; nodes: { target: string[]; html: string }[] }[];
 }
 
-async function axeScan(page: Page, label: string): Promise<void> {
+async function violationsOf(page: Page): Promise<AxeResult['violations']> {
   await page.addScriptTag({ content: AXE });
   const res = (await page.evaluate(async () => {
     // @ts-expect-error axe はページ側に注入している
@@ -66,15 +77,48 @@ async function axeScan(page: Page, label: string): Promise<void> {
       },
     });
   })) as AxeResult;
+  return res.violations;
+}
 
-  check(`axe ${label}`, res.violations.length, 0);
-  for (const v of res.violations) {
-    console.log(`        [${v.impact}] ${v.id}: ${v.help}（${v.nodes.length} 件）`);
+/** 破れた規則を、そのまま直せる形で並べる。 */
+function detail(violations: AxeResult['violations']): string[] {
+  const lines: string[] = [];
+  for (const v of violations) {
+    lines.push(`        [${v.impact}] ${v.id}: ${v.help}（${v.nodes.length} 件）`);
     for (const n of v.nodes.slice(0, 3)) {
-      console.log(`          ${n.target.join(' ')}`);
-      console.log(`          ${n.html.slice(0, 140).replace(/\s+/g, ' ')}`);
+      lines.push(`          ${n.target.join(' ')}`);
+      lines.push(`          ${n.html.slice(0, 140).replace(/\s+/g, ' ')}`);
     }
   }
+  return lines;
+}
+
+async function axeScan(page: Page, label: string): Promise<void> {
+  const violations = await violationsOf(page);
+  check(`axe ${label}`, violations.length, 0);
+  for (const line of detail(violations)) console.log(line);
+}
+
+/**
+ * 仕事を LANES 本の並びに流す。
+ *
+ * 出力は投げた順に並べ直す ― 45 枚が終わった順に流れてくると、
+ * どのページが落ちたのか目で追えなくなる。
+ */
+async function inLanes<T>(jobs: T[], work: (job: T) => Promise<string[]>): Promise<void> {
+  const output: string[][] = new Array(jobs.length);
+  let next = 0;
+
+  await Promise.all(
+    Array.from({ length: Math.min(LANES, jobs.length) }, async () => {
+      for (let i = next; i < jobs.length; i = next) {
+        next = i + 1;
+        output[i] = await work(jobs[i]);
+      }
+    }),
+  );
+
+  for (const lines of output) for (const line of lines) console.log(line);
 }
 
 /** いま focus が当たっている要素の、読み上げ名にあたる文字列。 */
@@ -94,14 +138,22 @@ function findChromium(): string | undefined {
 
 async function open(browser: Browser, path: string, theme?: 'dark' | 'light'): Promise<Page> {
   const page = await browser.newPage({ viewport: { width: 1280, height: 1000 } });
-  await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle' });
+  /*
+   * テーマは読み込む前に決めておく。
+   * <head> の中の 1 行が localStorage を読んで data-theme を付けるので、
+   * こちらが先に書いておけば、最初の描画からそのテーマで出る。
+   * 開いてから塗り替えると、色を見る規則が塗り替わる前の状態を拾うことがある。
+   */
   if (theme) {
-    await page.evaluate((t) => {
-      localStorage.setItem('git-manabe:theme', t);
-      document.documentElement.setAttribute('data-theme', t);
+    await page.addInitScript((t) => {
+      try {
+        localStorage.setItem('git-manabe:theme', t);
+      } catch {
+        /* 保存できない環境でも、既定のダークで動く */
+      }
     }, theme);
-    await page.waitForTimeout(300);
   }
+  await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle' });
   return page;
 }
 
@@ -115,13 +167,24 @@ async function main(): Promise<void> {
 
   try {
     // ---- 1. axe ----
-    for (const theme of ['dark', 'light'] as const) {
-      for (const path of PAGES) {
-        const page = await open(browser, path, theme);
-        await axeScan(page, `${theme} ${path}`);
+    // 検査そのものが空振りしていないことの確認。
+    // out/ が古い・空だと、1 枚も見ないまま「すべて通りました」と出てしまう
+    check('ページを見つけている', PAGES.length > 10, true);
+    console.log(`ページ ${PAGES.length} 枚を、ダークとライトの両方で見ます。\n`);
+
+    const jobs = (['dark', 'light'] as const).flatMap((theme) =>
+      PAGES.map((path) => ({ theme, path })),
+    );
+
+    await inLanes(jobs, async ({ theme, path }) => {
+      const page = await open(browser, path, theme);
+      try {
+        const violations = await violationsOf(page);
+        return [verdict(`axe ${theme} ${path}`, violations.length, 0), ...detail(violations)];
+      } finally {
         await page.close();
       }
-    }
+    });
 
     // 止まっているマージとヒント展開は、初期表示には出てこない状態なので別に見る
     const paused = await open(browser, '/levels/conflict/');
