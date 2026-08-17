@@ -1,7 +1,7 @@
 'use client';
 
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { layoutGraph, reachableCommits, type RepoState } from '@/lib/git-engine';
+import { bisectRange, layoutGraph, reachableCommits, type RepoState } from '@/lib/git-engine';
 
 /*
  * 上から下へ 1 行 1 コミット。レーンは左の細い帯に横並び。
@@ -41,9 +41,15 @@ function laneColor(lane: number): string {
  * バッジのおおよその幅。
  * SVG の中で実測するのは高くつくので、文字数から見積もる。
  * 描画（RefBadge）と幅の計算で、必ず同じ値を使う。
+ *
+ * 半角と全角で幅が倍ほど違うので、分けて数える。
+ * 一律 7.4px で見積もっていた頃は、日本語の枝名（救出 など）や
+ * bisect の判定バッジが、枠から溢れて出ていた。
  */
 function badgeWidth(text: string): number {
-  return Math.max(38, text.length * 7.4 + 14);
+  let w = 0;
+  for (const ch of text) w += /[\u0020-\u007e]/.test(ch) ? 7.4 : 11;
+  return Math.max(38, w + 14);
 }
 
 /** メッセージは長いとバッジとぶつかるので、この長さで丸める。 */
@@ -153,6 +159,16 @@ export function CommitGraph({
   const reachable = reachableCommits(state);
   const orphaned = layout.nodes.filter((n) => !reachable.has(n.id)).length;
 
+  /*
+   * 二分探索中は、まだ「最初に壊れたコミット」かもしれない範囲に帯を敷く。
+   *
+   * このコマンドで起きているのは**範囲が半分ずつ狭まっていく**ことなので、
+   * それが目に見えないと、ただ HEAD が飛び回っているようにしか見えない。
+   * good / bad と答えるたびに帯が縮むのが、そのままアルゴリズムの説明になる。
+   */
+  const bisecting = state.bisect;
+  const searching = bisecting ? new Set(bisectRange(state, bisecting)) : null;
+
   /** 同じコミットに付くバッジの、何番目か。横に並べる位置を決めるのに使う。 */
   const runningX = new Map<string, number>();
 
@@ -174,6 +190,27 @@ export function CommitGraph({
           className="block"
           data-testid="commit-graph"
         >
+          {/* 探索の範囲。いちばん下に敷いて、線にも丸にもかからないようにする */}
+          <AnimatePresence>
+            {searching &&
+              layout.nodes
+                .filter((n) => searching.has(n.id))
+                .map((n) => (
+                  <motion.rect
+                    key={`range:${n.id}`}
+                    x={0}
+                    y={PAD_Y + n.row * ROW_H}
+                    width={width}
+                    height={ROW_H}
+                    fill="var(--bisect-range)"
+                    initial={reduce ? false : { opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={reduce ? { duration: 0 } : { duration: 0.3 }}
+                  />
+                ))}
+          </AnimatePresence>
+
           {/* 辺（親 → 子）。新しく張られた辺は、線が伸びるように描く */}
           <g>
             <AnimatePresence>
@@ -378,6 +415,7 @@ export function CommitGraph({
         orphaned={orphaned}
         lanes={layout.lanes}
         hasRemote={state.remoteBranches.length > 0}
+        searching={searching?.size ?? 0}
         theme={theme}
       />
     </div>
@@ -541,12 +579,15 @@ function Legend({
   orphaned,
   lanes,
   hasRemote,
+  searching,
   theme,
 }: {
   hasMerge: boolean;
   orphaned: number;
   lanes: number;
   hasRemote: boolean;
+  /** 二分探索の範囲に入っているコミットの数。0 なら探索していない。 */
+  searching: number;
   theme: 'plain' | 'florist';
 }) {
   return (
@@ -569,6 +610,13 @@ function Legend({
       {hasMerge && (
         <li>{theme === 'florist' ? '八重咲き' : '◎'} ＝ マージコミット（親が 2 つ）</li>
       )}
+      {searching > 0 && (
+        <li data-legend="bisect">
+          帯 ＝ まだ「最初に壊れた」かもしれない範囲（{searching} 件）。
+          <span className="text-[var(--bisect-good)]">✓ 動いた</span> ・
+          <span className="text-[var(--bisect-bad)]">✗ 壊れた</span> と答えるたびに狭まります
+        </li>
+      )}
       {orphaned > 0 && (
         <li>
           <span className="opacity-40">{theme === 'florist' ? '傾いた花' : '◌'}</span>
@@ -590,7 +638,7 @@ function edgePath(from: Placed, to: Placed): string {
   return `M ${from.cx} ${from.cy} C ${from.cx} ${mid}, ${to.cx} ${mid}, ${to.cx} ${to.cy}`;
 }
 
-type Tone = 'branch' | 'head' | 'tag' | 'detached' | 'remote';
+type Tone = 'branch' | 'head' | 'tag' | 'detached' | 'remote' | 'good' | 'bad' | 'skip';
 
 interface Label {
   key: string;
@@ -631,6 +679,25 @@ function labelsFor(state: RepoState): Label[] {
     labels.push({ key: `remote:${r.name}`, text: r.name, tone: 'remote', target: r.target });
   }
 
+  /*
+   * bisect で答えた判定。
+   *
+   * いま調べている場所は detached HEAD のバッジが指しているので、ここには出さない。
+   * 出すのは**もう答えたところ**だけ ― 挟み込みが両側から狭まっていくのが見えればよい。
+   */
+  const bisect = state.bisect;
+  if (bisect) {
+    const face = {
+      good: { text: '✓ 動いた', tone: 'good' as const },
+      bad: { text: '✗ 壊れた', tone: 'bad' as const },
+      skip: { text: '－ 保留', tone: 'skip' as const },
+    };
+    for (const [id, verdict] of Object.entries(bisect.verdicts)) {
+      if (!state.commits[id]) continue;
+      labels.push({ key: `bisect:${id}`, text: face[verdict].text, tone: face[verdict].tone, target: id });
+    }
+  }
+
   return labels;
 }
 
@@ -645,6 +712,22 @@ const TONE: Record<Tone, { stroke: string; fill: string; text: string; dashed?: 
     dashed: true,
   },
   remote: { stroke: 'var(--remote)', fill: 'var(--tint-lime)', text: 'var(--remote)' },
+  /*
+   * bisect の判定。ref の色とは意味の層が違うので、専用の色を使う。
+   * 記号（✓ ✗ －）も入れてあるので、色が見分けにくくても読める。
+   */
+  good: {
+    stroke: 'var(--bisect-good)',
+    fill: 'var(--tint-bisect-good)',
+    text: 'var(--bisect-good)',
+  },
+  bad: { stroke: 'var(--bisect-bad)', fill: 'var(--tint-bisect-bad)', text: 'var(--bisect-bad)' },
+  skip: {
+    stroke: 'var(--commit-dim)',
+    fill: 'var(--bg-elev)',
+    text: 'var(--text-muted)',
+    dashed: true,
+  },
 };
 
 /** バッジ 1 つ。原点が左端・行の中心になるように描く。 */

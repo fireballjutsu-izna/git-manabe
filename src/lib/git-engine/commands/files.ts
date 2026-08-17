@@ -63,6 +63,38 @@ export function touch(state: RepoState, command: ParsedCommand): CommandResult {
 }
 
 /**
+ * `cat <path>` — Git のコマンドではない。
+ *
+ * 作業ディレクトリのファイルを、そのまま読む。
+ *
+ * これが無いと困る場面が 2 つある。
+ * ぶつかって止まったとき ―「ファイルを開いたら <<<<<<< が入っていた」を
+ * 実際に開いて確かめられない。もう 1 つが bisect で、
+ * 移った先が壊れているかどうかは、中身を見ないと判定できない。
+ */
+export function cat(state: RepoState, command: ParsedCommand): CommandResult {
+  const blocked = requireRepo(state);
+  if (blocked) return blocked;
+
+  const path = command.positional[0];
+  if (!path) {
+    return fail(state, 'ファイル名を書いてください。', '例: cat hello.txt');
+  }
+
+  const content = state.work[path];
+  if (!content) {
+    const here = Object.keys(state.work).sort();
+    return fail(
+      state,
+      `${path} は、いまの作業ディレクトリにありません。`,
+      here.length > 0 ? `あるのは ${here.join(', ')} です。` : 'まだ 1 つもファイルがありません。',
+    );
+  }
+
+  return ok(state, [`${path}（${content.length} 行）`, ...content.map((line) => `  ${line}`)], []);
+}
+
+/**
  * `append <path> <行>` — Git のコマンドではない。
  *
  * ファイルの末尾に 1 行足す。edit が 1 行目を差し替えるのに対し、こちらは積む。

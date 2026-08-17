@@ -2,6 +2,7 @@ import { pageMetadata } from '@/lib/seo';
 import { DOCS } from '@/lib/docs';
 import { LEVELS } from '@/lib/levels';
 import { SCENARIOS } from '@/lib/scenarios';
+import { HELPER_COMMANDS } from '@/lib/git-engine';
 
 export const metadata = pageMetadata({
   title: 'はじめに',
@@ -82,7 +83,7 @@ Git が値を持つ場所は 3 つあります。
 
 ## Git には無いコマンド
 
-このサイトだけの補助コマンドが 5 つあります。
+このサイトだけの補助コマンドが {HELPER_COMMANDS.length} つあります。
 本物を触るときには存在しないので、区別しておいてください。
 
 | コマンド | 何をするか |
@@ -90,6 +91,7 @@ Git が値を持つ場所は 3 つあります。
 | `touch <path> [中身]` | ファイルを作る（エディタでの操作にあたります） |
 | `edit <path> [中身]` | 1 行目を書き換える |
 | `append <path> <行>` | 末尾に 1 行足す |
+| `cat <path>` | 中身を読む（本物ではシェルの cat やエディタにあたります） |
 | `todo …` | 対話的 rebase の計画を組み立てる（本物はエディタで書き換えます） |
 | `teammate <数>` | 「同僚が向こうへコミットした」ことにする |
 

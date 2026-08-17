@@ -142,6 +142,14 @@ export default function HomePage() {
           </li>
           <li className="flex gap-3">
             <code className="mt-0.5 shrink-0 rounded border border-line bg-inset px-1.5 font-mono text-xs text-muted">
+              git bisect
+            </code>
+            <span className="text-sm">
+              いつ壊れたかを半分ずつ探す。60 個のコミットでも 6 回で 1 つに絞れる
+            </span>
+          </li>
+          <li className="flex gap-3">
+            <code className="mt-0.5 shrink-0 rounded border border-line bg-inset px-1.5 font-mono text-xs text-muted">
               git reflog
             </code>
             <span className="text-sm">

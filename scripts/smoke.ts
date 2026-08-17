@@ -350,7 +350,13 @@ async function main(): Promise<void> {
     // ---- レベル ----
     // 一覧 → 1 つ解く → クリア記録が残り、一覧に反映される、まで通す
     await page.goto(`${BASE}/levels/`, { waitUntil: 'networkidle' });
-    check('レベルが 15 個並ぶ', await page.locator('[data-level]').count(), 15);
+    /*
+     * 数そのものは書かない。書くと、レベルを 1 つ足すたびにここも直すことになり、
+     * 直し忘れたぶんだけ「失敗しているのに正しい」検査が積み上がる。
+     * 見るのは**記事と 1 対 1 で対応していること**（下の記事の節で突き合わせる）。
+     */
+    const levelCount = await page.locator('[data-level]').count();
+    check('レベルが並ぶ', levelCount >= 10, true);
     check(
       '最初はどれもクリアしていない',
       await page.locator('[data-level][data-cleared]').count(),
@@ -636,6 +642,74 @@ async function main(): Promise<void> {
       1,
     );
 
+    // ---- bisect ----
+    /*
+     * 二分探索は「範囲が半分ずつ狭まる」のが要点。
+     * 帯の行数が減っていくところまで見ないと、ただ HEAD が飛んでいるのと区別が付かない。
+     */
+    await page.goto(`${BASE}/levels/bisect/`, { waitUntil: 'networkidle' });
+    const bisectInput = page.locator('#command-input');
+    await bisectInput.waitFor({ timeout: 15_000 });
+    const beforeBisect = await page.locator('[data-commit]').count();
+
+    const bisectLine = async (line: string): Promise<void> => {
+      await bisectInput.fill(line);
+      await bisectInput.press('Enter');
+      await page.waitForTimeout(220);
+    };
+
+    await bisectLine('git bisect start HEAD HEAD~7');
+    check('探索してもコミットは増えない', await page.locator('[data-commit]').count(), beforeBisect);
+    check('凡例に探索中と出る', await countEventually(page, '[data-legend="bisect"]', 1), 1);
+
+    /*
+     * 8 個のうち、いちばん古い 1 つを good として挟んだので、残り 7 個が範囲になる。
+     * 消えていく帯は exit のあいだ DOM に残るので、数が落ち着くまで待つ。
+     */
+    const band = '[data-testid="commit-graph"] rect[fill*="bisect-range"]';
+    const badge = (text: string): string =>
+      `[data-testid="commit-graph"] text:text-is("${text}")`;
+
+    check('帯が範囲のぶんだけ敷かれる', await countEventually(page, band, 7), 7);
+    // start で挟んだ 2 点にも、その場で印が付く
+    check('挟んだ両端に印が付く', await countEventually(page, badge('✗ 壊れた'), 1), 1);
+    check('動いていた側にも印が付く', await countEventually(page, badge('✓ 動いた'), 1), 1);
+
+    await bisectLine('git bisect bad');
+    // まん中が壊れていた ＝ 上半分がまるごと消えて、7 個から 4 個へ
+    check('壊れていると答えると、新しい側が消える', await countEventually(page, band, 4), 4);
+    check('答えた場所に印が増える', await countEventually(page, badge('✗ 壊れた'), 2), 2);
+
+    await bisectLine('git bisect good');
+    // 今度は下半分が消えて、4 個から 2 個へ
+    check('動くと答えると、古い側が消える', await countEventually(page, band, 2), 2);
+    check('動いたほうにも印が増える', await countEventually(page, badge('✓ 動いた'), 2), 2);
+
+    await bisectLine('git bisect bad');
+    check('3 回でクリアになる', await countEventually(page, '[data-testid="cleared"]', 1), 1);
+
+    // 見つけただけでは detached HEAD のまま。戻るところまでが手順
+    check(
+      '見つけたあとも枝から外れている',
+      await page.locator('[data-testid="commit-graph"] text:text-is("HEAD")').count(),
+      1,
+    );
+    await bisectLine('git bisect reset');
+    check('reset で帯が消える', await page.locator('[data-legend="bisect"]').count(), 0);
+    check(
+      'reset で枝へ戻る',
+      await countEventually(page, '[data-testid="commit-graph"] text:text-is("HEAD → main")', 1),
+      1,
+    );
+
+    // 中身を読む手段があること。これが無いと good か bad かを決められない
+    await bisectLine('cat shop.txt');
+    check(
+      'cat で中身が読める',
+      await countEventually(page, '.xterm-screen >> text=閉まっています', 1),
+      1,
+    );
+
     // ---- 対話的 rebase ----
     // -i は「打っても何も起きない」が要点。パネルで組み立ててから実行する
     await page.goto(`${BASE}/levels/interactive/`, { waitUntil: 'networkidle' });
@@ -698,7 +772,10 @@ async function main(): Promise<void> {
     // ---- 記事 ----
     // 記事とレベルは同じ id で結ばれている。行き来できることを通しで見る
     await page.goto(`${BASE}/docs/`, { waitUntil: 'networkidle' });
-    check('記事が 15 本並ぶ', await page.locator('[data-doc]').count(), 15);
+    const docCount = await page.locator('[data-doc]').count();
+    check('記事が並ぶ', docCount >= 10, true);
+    // カリキュラムは「1 項目 = 記事 1 本 = レベル 1 つ」。片方だけ足したら、ここで落ちる
+    check('記事とレベルが 1 対 1 で対応している', docCount, levelCount);
 
     await page.goto(`${BASE}/docs/conflict/`, { waitUntil: 'networkidle' });
     check('記事の見出しが出る', await page.locator('h1').count(), 1);

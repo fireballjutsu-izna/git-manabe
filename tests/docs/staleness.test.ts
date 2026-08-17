@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DOCS } from '@/lib/docs';
@@ -35,6 +35,17 @@ const pages = walk(DOCS_DIR, '.mdx').map((file) => ({
   where: relative(process.cwd(), file),
   text: readFileSync(file, 'utf8'),
 }));
+
+/**
+ * そのコマンドを実装しているファイルの中身。見つからなければ null。
+ *
+ * サブコマンド（git bisect run の run）まで見るときに使う。
+ * エンジン全体を引くと、別のコマンドの同名サブコマンド（todo run）に当たってしまう。
+ */
+function sourceOf(name: string): string | null {
+  const path = join(ENGINE_DIR, 'commands', `${name}.ts`);
+  return existsSync(path) ? readFileSync(path, 'utf8') : null;
+}
 
 /** エンジンのソース全部。フラグが実装済みかは、ここを引いて確かめる。 */
 const engineSource = walk(ENGINE_DIR, '.ts')
@@ -166,9 +177,19 @@ describe('「扱っていません」が嘘になっていない', () => {
     for (const [, span] of line.matchAll(/`([^`]+)`/g)) {
       const token = span.trim();
 
-      const asCommand = token.match(/^git\s+([a-z-]+)/);
+      /*
+       * サブコマンドまで書いてあるなら、そこまで見る。
+       *
+       * git bisect は入っているが git bisect run は入っていない ―
+       * コマンド名だけで判定すると、正しい断り書きを「嘘だ」と言ってしまう。
+       * そのコマンドを実装しているファイルを引いて、
+       * サブコマンドの文字列がその中にあるかどうかで決める。
+       */
+      const asCommand = token.match(/^git\s+([a-z-]+)(?:\s+([a-z][\w-]*))?/);
       if (asCommand && KNOWN.has(asCommand[1])) {
-        found.push(token);
+        const own = sourceOf(asCommand[1]);
+        const sub = asCommand[2];
+        if (!sub || !own || own.includes(`'${sub}'`)) found.push(token);
         continue;
       }
 

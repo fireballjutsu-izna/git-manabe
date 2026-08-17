@@ -29,6 +29,7 @@ export function emptyState(): RepoState {
     remoteBranches: [],
     pausing: null,
     todo: null,
+    bisect: null,
     reflog: [],
     seq: 0,
   };
