@@ -141,7 +141,7 @@ export function AreaPanes({
       >
         <div className="flex items-center justify-between gap-2">
           <span className="font-bold text-head">HEAD</span>
-          <span className="font-mono text-[11px] text-muted">
+          <span className="font-mono text-xs sm:text-[11px] text-muted">
             {!state.initialized
               ? '—'
               : branch && !head
@@ -171,15 +171,15 @@ export function AreaPanes({
         >
           <div className="flex items-center justify-between gap-2">
             <span className="font-bold text-tag">退避中（stash）</span>
-            <span className="font-mono text-[11px] text-muted">{state.stash.length} 件</span>
+            <span className="font-mono text-xs sm:text-[11px] text-muted">{state.stash.length} 件</span>
           </div>
           <ul className="mt-1 space-y-0.5">
             {[...state.stash].reverse().map((entry, i) => (
               <li key={entry.id} className="flex items-center justify-between gap-2">
-                <code className="truncate font-mono text-[11px] text-fg">
+                <code className="truncate font-mono text-xs sm:text-[11px] text-fg">
                   stash&#123;{i}&#125; {entry.message}
                 </code>
-                <span className="shrink-0 text-[10px] text-muted">
+                <span className="shrink-0 text-xs sm:text-[10px] text-muted">
                   {entry.index.length + entry.workingDir.length} 件
                 </span>
               </li>
@@ -210,7 +210,7 @@ function RemotePane({ state }: { state: RepoState }) {
     <div data-pane="remote" className="rounded-card border border-remote bg-tint-lime px-3 py-2 text-xs">
       <div className="flex items-center justify-between gap-2">
         <span className="font-bold text-remote">リモート</span>
-        <span className="font-mono text-[11px] text-muted">
+        <span className="font-mono text-xs sm:text-[11px] text-muted">
           {state.remotes.map((r) => r.name).join(', ')}
         </span>
       </div>
@@ -228,9 +228,9 @@ function RemotePane({ state }: { state: RepoState }) {
             return (
               <li key={name}>
                 <div className="flex items-center justify-between gap-2">
-                  <code className="truncate font-mono text-[11px] text-fg">{name}</code>
+                  <code className="truncate font-mono text-xs sm:text-[11px] text-fg">{name}</code>
                   {branch === rb.name && (
-                    <span className="shrink-0 text-[10px] text-muted">
+                    <span className="shrink-0 text-xs sm:text-[10px] text-muted">
                       進み {ahead} / 遅れ {behind}
                     </span>
                   )}
@@ -279,7 +279,7 @@ function PausePane({ state }: { state: RepoState }) {
         <span className="font-bold text-detached">
           {ways.label}が途中で止まっています
         </span>
-        <code className="shrink-0 truncate font-mono text-[11px] text-muted">{pausing.from}</code>
+        <code className="shrink-0 truncate font-mono text-xs sm:text-[11px] text-muted">{pausing.from}</code>
       </div>
 
       {done ? (
@@ -291,8 +291,8 @@ function PausePane({ state }: { state: RepoState }) {
           <ul className="mt-1.5 space-y-0.5">
             {pausing.conflicts.map((c) => (
               <li key={c.path} className="flex items-center justify-between gap-2">
-                <code className="truncate font-mono text-[11px] text-fg">{c.path}</code>
-                <span className="shrink-0 rounded border border-detached px-1 text-[10px] text-detached">
+                <code className="truncate font-mono text-xs sm:text-[11px] text-fg">{c.path}</code>
+                <span className="shrink-0 rounded border border-detached px-1 text-xs sm:text-[10px] text-detached">
                   同じ行を両方が変更
                 </span>
               </li>
@@ -394,9 +394,9 @@ function Pane({
           {icon}
           {title}
         </h3>
-        <span className="text-[11px] text-muted">{items.length > 0 ? items.length : ''}</span>
+        <span className="text-xs sm:text-[11px] text-muted">{items.length > 0 ? items.length : ''}</span>
       </header>
-      <p className="mt-0.5 text-[11px] leading-snug text-muted">{note}</p>
+      <p className="mt-0.5 text-xs sm:text-[11px] leading-snug text-muted">{note}</p>
 
       <ul className="mt-2 space-y-1">
         <AnimatePresence initial={false}>
@@ -416,7 +416,7 @@ function Pane({
               </code>
               <span
                 className={[
-                  'shrink-0 rounded border px-1 text-[10px]',
+                  'shrink-0 rounded border px-1 text-xs sm:text-[10px]',
                   item.alert
                     ? 'border-detached text-detached'
                     : 'border-line text-muted',
@@ -436,7 +436,7 @@ function Pane({
 /** 領域と領域のあいだの矢印。どのコマンドが渡し役かを書いておく。 */
 function Arrow({ label, lit }: { label: string; lit: boolean }) {
   return (
-    <div className="flex items-center justify-center gap-2 text-[11px]">
+    <div className="flex items-center justify-center gap-2 text-xs sm:text-[11px]">
       <span
         className="transition-colors duration-300"
         style={{ color: lit ? 'var(--text)' : 'var(--text-muted)' }}

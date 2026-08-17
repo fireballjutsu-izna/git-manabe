@@ -469,19 +469,20 @@ async function main(): Promise<void> {
     check('解くとクリア表示が出る', await countEventually(page, '[data-testid="cleared"]', 1), 1);
 
     // ---- 狭い画面 ----
-    // グリッドの子は min-width:auto が既定で、xterm の最小幅にひきずられて
-    // 本文ごと横にはみ出す。目で見て気づきにくいので、数で押さえておく。
+    /*
+     * 横のはみ出し・タップ領域・文字の大きさは scripts/mobile.ts が
+     * 全ページ × 2 幅で見ている。ここに残すのは、そこでは見られないもの
+     * ― ヘッダーが 1 行に収まっているか、だけ。
+     * ヘッダーは畳まずに横へ流す作りなので、帯の高さが伸びたら折り返している。
+     */
     const narrow = await browser.newPage({ viewport: { width: 360, height: 780 } });
     for (const path of ['/', '/start/', '/levels/', '/sandbox/', '/levels/conflict/']) {
       await narrow.goto(`${BASE}${path}`, { waitUntil: 'networkidle' });
       await narrow.waitForTimeout(500);
       const size = await narrow.evaluate(() => ({
-        scroll: document.documentElement.scrollWidth,
-        inner: window.innerWidth,
         nav: document.querySelector('header nav')!.getBoundingClientRect().height,
         bar: document.querySelector('header > div')!.getBoundingClientRect().height,
       }));
-      check(`360px で横にはみ出さない ${path}`, size.scroll <= size.inner + 1, true);
       check(`360px でヘッダーが 1 行に収まる ${path}`, size.nav <= size.bar, true);
     }
     await narrow.close();

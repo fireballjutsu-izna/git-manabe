@@ -16,7 +16,8 @@
     "links": "node scripts/links.ts",
     "a11y": "node scripts/a11y.ts",
     "og": "node scripts/make-og.ts",
-    "lighthouse": "node scripts/lighthouse.ts"
+    "lighthouse": "node scripts/lighthouse.ts",
+    "mobile": "node scripts/mobile.ts"
   },
   "dependencies": {
     "@mdx-js/loader": "^3.1.1",

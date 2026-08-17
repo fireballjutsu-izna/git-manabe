@@ -57,7 +57,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <Link prefetch={false}
                   key={item.href}
                   href={item.href}
-                  className="rounded px-2 py-1.5 whitespace-nowrap text-muted no-underline hover:bg-inset hover:text-fg sm:px-2.5"
+                  /* data-tap … 狭い画面で 44px 角を確保する対象（globals.css） */
+                  data-tap=""
+                  className="flex items-center rounded px-2 py-1.5 whitespace-nowrap text-muted no-underline hover:bg-inset hover:text-fg sm:px-2.5"
                 >
                   {item.label}
                 </Link>

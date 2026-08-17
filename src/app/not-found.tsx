@@ -19,19 +19,22 @@ export default function NotFound() {
       <div className="mt-6 flex flex-wrap gap-2 text-sm">
         <Link prefetch={false}
           href="/levels"
-          className="rounded border border-line-lit px-4 py-2 text-fg no-underline hover:border-cyan-neon"
+          data-tap=""
+          className="flex items-center rounded border border-line-lit px-4 py-2 text-fg no-underline hover:border-cyan-neon"
         >
           レベル一覧
         </Link>
         <Link prefetch={false}
           href="/sandbox"
-          className="rounded border border-line px-4 py-2 text-muted no-underline hover:border-line-lit hover:text-fg"
+          data-tap=""
+          className="flex items-center rounded border border-line px-4 py-2 text-muted no-underline hover:border-line-lit hover:text-fg"
         >
           サンドボックス
         </Link>
         <Link prefetch={false}
           href="/start"
-          className="rounded border border-line px-4 py-2 text-muted no-underline hover:border-line-lit hover:text-fg"
+          data-tap=""
+          className="flex items-center rounded border border-line px-4 py-2 text-muted no-underline hover:border-line-lit hover:text-fg"
         >
           はじめに
         </Link>

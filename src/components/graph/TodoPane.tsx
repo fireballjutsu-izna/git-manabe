@@ -42,7 +42,7 @@ export function TodoPane() {
     >
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-sm font-bold text-head">書き換えの計画を立てています</h3>
-        <code className="font-mono text-[11px] text-muted">
+        <code className="font-mono text-xs sm:text-[11px] text-muted">
           {todo.upstream} の上へ / {kept} 件になります
         </code>
       </header>
@@ -68,7 +68,7 @@ export function TodoPane() {
             >
               {/* 並べ替え。上が古い ― 本物の todo ファイルと同じ向き */}
               <div className="flex items-center gap-1">
-                <span className="w-4 shrink-0 text-center font-mono text-[10px] text-muted">
+                <span className="w-4 shrink-0 text-center font-mono text-xs sm:text-[10px] text-muted">
                   {i + 1}
                 </span>
                 <button
@@ -92,10 +92,10 @@ export function TodoPane() {
               </div>
 
               <div className="min-w-0">
-                <code className="font-mono text-[11px] text-muted">{item.id}</code>{' '}
+                <code className="font-mono text-xs sm:text-[11px] text-muted">{item.id}</code>{' '}
                 <span className="text-fg">{item.message}</span>
                 {item.message !== item.original && (
-                  <span className="ml-1 text-[10px] text-muted">（元: {item.original}）</span>
+                  <span className="ml-1 text-xs sm:text-[10px] text-muted">（元: {item.original}）</span>
                 )}
               </div>
 
@@ -119,7 +119,7 @@ export function TodoPane() {
                         )
                       }
                       className={[
-                        'rounded border px-1.5 py-0.5 font-mono text-[10px] disabled:opacity-25',
+                        'rounded border px-1.5 py-0.5 font-mono text-xs sm:text-[10px] disabled:opacity-25',
                         chosen ? `${a.tone} font-bold` : 'border-line text-muted',
                       ].join(' ')}
                     >
@@ -149,7 +149,7 @@ export function TodoPane() {
         >
           やめる
         </button>
-        <span className="text-[11px] text-muted">
+        <span className="text-xs sm:text-[11px] text-muted">
           ボタンは <code className="font-mono">todo</code> コマンドを打っています。ターミナルにも残ります。
         </span>
       </div>

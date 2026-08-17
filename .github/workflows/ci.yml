@@ -68,6 +68,11 @@ jobs:
       - name: Smoke
         run: npm run smoke
 
+      # 狭い画面でしか出ない壊れ方（横はみ出し・指で押せない大きさ・小さすぎる文字）。
+      # 机の上の画面では、まず気づけない。
+      - name: Mobile
+        run: npm run mobile
+
       # 目で見ている限り気づけない壊れ方（キーボードトラップ・読み上げ）は、
       # ここでしか捕まらない。smoke と同じブラウザを使い回す。
       - name: Accessibility
