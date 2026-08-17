@@ -1,6 +1,6 @@
 import { changedPaths, formatFileDiff } from '../content';
 import { hasFlag, type ParsedCommand } from '../parse';
-import { fail, headCommitId, ok, requireRepo, resolveRevision, treeOf } from '../state';
+import { fail, headCommitId, joinJa, ok, requireRepo, resolveRevision, treeOf } from '../state';
 import type { CommandResult, RepoState, Tree } from '../types';
 
 /**
@@ -103,7 +103,7 @@ function show(
   const paths = changedPaths(before, after);
 
   if (paths.length === 0) {
-    return ok(state, [`${beforeLabel} と ${afterLabel} に違いはありません。`, note], []);
+    return ok(state, [joinJa(beforeLabel, 'と', afterLabel, 'に違いはありません。'), note], []);
   }
 
   const lines: string[] = [];

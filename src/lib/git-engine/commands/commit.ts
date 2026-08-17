@@ -1,6 +1,7 @@
 import { defaultContent } from '../content';
 import { flagValue, type ParsedCommand } from '../parse';
 import {
+  joinJa,
   addCommit,
   copyTree,
   currentBranchName,
@@ -50,7 +51,7 @@ export function commit(state: RepoState, command: ParsedCommand): CommandResult 
       const kind = state.pausing.kind;
       return fail(
         state,
-        `${pausingWays(kind).label}の途中です。ここでの続きは git commit ではありません。`,
+        joinJa(pausingWays(kind).label, 'の途中です。ここでの続きは git commit ではありません。'),
         `git ${kind} --continue で続けるか、git ${kind} --abort でやめてください。`,
       );
     }

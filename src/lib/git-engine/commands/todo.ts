@@ -12,9 +12,9 @@ import type { CommandResult, RepoState, Todo, TodoItem } from '../types';
  *   squash e4f5g6h  typo
  *   drop   i7j8k9l  デバッグ用のログ
  *
- * 行を書き換えたりを並べ替えたりして、**エディタを閉じると始まる**。
+ * 行を書き換えたり並べ替えたりして、**エディタを閉じると始まる**。
  * ブラウザにはエディタが無いので、同じことをこのコマンドとパネルでやる。
- * touch や edit と同じで、Git には無い補助コマンドです。
+ * touch や edit と同じで、Git には無い補助コマンド。
  *
  *   todo list            いまの計画を見る
  *   todo pick <n>        n 行目をそのまま積む

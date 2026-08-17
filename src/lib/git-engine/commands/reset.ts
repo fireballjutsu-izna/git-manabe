@@ -47,7 +47,7 @@ export function reset(state: RepoState, command: ParsedCommand): CommandResult {
     );
   }
 
-  const spec = command.positional[0] ?? 'HEAD';
+  const { spec, paths } = split(state, command.positional);
   const head = headCommitId(state);
   if (!head) {
     return fail(
@@ -69,6 +69,17 @@ export function reset(state: RepoState, command: ParsedCommand): CommandResult {
     );
   }
 
+  /*
+   * パスを書いたときは、まったく別のコマンドになる。
+   *
+   *   git reset HEAD~1        枝を動かす
+   *   git reset HEAD a.txt    枝は動かさず、a.txt をステージから降ろすだけ
+   *
+   * 「間違えて add した 1 つを外す」は add の直後に必ず使う操作で、
+   * ここを枝の移動と一緒にしてしまうと、覚え方そのものが壊れる。
+   */
+  if (paths.length > 0) return unstage(state, target, spec, paths, mode);
+
   // 取り消される（HEAD から辿れなくなる）コミットと、そこに入っていた変更
   const dropped = commitsBetween(state, target, head);
   const droppedPaths = pathsIn(state, dropped);
@@ -76,8 +87,17 @@ export function reset(state: RepoState, command: ParsedCommand): CommandResult {
   let next = moveRef(state, target);
   const tracked = recomputeTracked(next, target);
 
-  const { index, workingDir, touched, note } = applyMode(mode, next, droppedPaths, tracked);
-  const { work, stage } = applyContent(mode, next, target);
+  /*
+   * Git が知らないファイル（untracked）は、--hard でも消えない。
+   * 消すには git clean が要る ― 本物と同じ。
+   * 「--hard で全部きれいになる」と覚えると、本物で必ず面食らう。
+   */
+  const untracked = state.workingDir.filter(
+    (f) => f.status === 'untracked' || f.status === 'ignored',
+  );
+
+  const { index, workingDir, touched, note } = applyMode(mode, next, droppedPaths, tracked, untracked);
+  const { work, stage } = applyContent(mode, next, target, untracked);
 
   next = { ...next, index, workingDir, work, stage, tracked };
   next = recordReflog(next, `reset --${mode}`, `${spec} へ戻す`, head, target);
@@ -122,11 +142,19 @@ function applyContent(
   mode: Mode,
   state: RepoState,
   target: string,
+  untracked: FileState[],
 ): { work: Tree; stage: Tree } {
   const there = treeOf(state, target);
   if (mode === 'soft') return { work: state.work, stage: state.stage };
   if (mode === 'mixed') return { work: state.work, stage: copyTree(there) };
-  return { work: copyTree(there), stage: copyTree(there) };
+
+  // --hard。Git が知らないファイルだけは、手元に置いたままにする
+  const work = copyTree(there);
+  for (const f of untracked) {
+    const mine = state.work[f.path];
+    if (mine) work[f.path] = [...mine];
+  }
+  return { work, stage: copyTree(there) };
 }
 
 /** 枝の上なら枝ごと動かし、detached なら HEAD だけ動かす。 */
@@ -141,6 +169,7 @@ function applyMode(
   state: RepoState,
   droppedPaths: string[],
   tracked: string[],
+  untracked: FileState[],
 ): { index: FileState[]; workingDir: FileState[]; touched: Area[]; note: string } {
   // 戻した先から見て、そのパスが既知なら「変更された」、未知なら「新しいファイル」
   const asFile = (path: string, staged: boolean): FileState => ({
@@ -166,9 +195,12 @@ function applyMode(
   if (mode === 'hard') {
     return {
       index: [],
-      workingDir: [],
+      workingDir: untracked,
       touched: ['index', 'workingDir'],
-      note: 'ステージも作業ディレクトリも空にしました。戻した先のコミットそのままの状態です。',
+      note:
+        untracked.length > 0
+          ? `戻した先のコミットそのままの状態にしました。Git が知らない ${untracked.map((f) => f.path).join(', ')} は、--hard でも消えません（消すには git clean が要ります）。`
+          : 'ステージも作業ディレクトリも空にしました。戻した先のコミットそのままの状態です。',
     };
   }
 
@@ -191,4 +223,88 @@ function applyMode(
         ? '取り消したコミットの中身は、ステージされていない変更として手元に残っています。'
         : 'ステージを空にしました。作業ディレクトリはそのままです。',
   };
+}
+
+/**
+ * 引数を「行き先」と「パス」に分ける。
+ *
+ *   git reset HEAD~1        行き先 HEAD~1、パス無し
+ *   git reset HEAD a.txt    行き先 HEAD、パス a.txt
+ *   git reset a.txt         行き先 HEAD、パス a.txt
+ *
+ * 1 つしか書かれていないときが紛らわしい。
+ * 行き先として読めるならそちらを優先する ― 本物も同じ順で解く。
+ */
+function split(state: RepoState, positional: string[]): { spec: string; paths: string[] } {
+  const [first, ...rest] = positional;
+  if (first === undefined) return { spec: 'HEAD', paths: [] };
+  if (rest.length > 0) return { spec: first, paths: rest };
+
+  const asRevision = resolveRevision(state, first);
+  if (asRevision !== null) return { spec: first, paths: [] };
+  return knownPath(state, first) ? { spec: 'HEAD', paths: [first] } : { spec: first, paths: [] };
+}
+
+/** 3 領域のどこかに、そのパスがあるか。 */
+function knownPath(state: RepoState, path: string): boolean {
+  return (
+    state.work[path] !== undefined ||
+    state.stage[path] !== undefined ||
+    state.tracked.includes(path)
+  );
+}
+
+/**
+ * `git reset [<commit>] <path>...` ― 枝は動かさない。
+ *
+ * やるのは「そのパスのステージを、指定したコミットの中身に戻す」だけ。
+ * 作業ディレクトリには触らない ― 手を入れたぶんが消えないから、
+ * 「間違えて add した」を取り消すのに安心して使える。
+ */
+function unstage(
+  state: RepoState,
+  target: string,
+  spec: string,
+  paths: string[],
+  mode: Mode,
+): CommandResult {
+  if (mode === 'hard') {
+    return fail(
+      state,
+      '--hard とパスは、いっしょに使えません。',
+      'ステージから降ろすだけなら git reset <path>、手元のファイルごと戻すなら git checkout <path> です。',
+    );
+  }
+
+  const there = treeOf(state, target);
+  const stage: Tree = { ...state.stage };
+  for (const path of paths) {
+    if (there[path] === undefined) delete stage[path];
+    else stage[path] = [...there[path]];
+  }
+
+  // 降ろしたパスをステージから外す。手元の中身がステージと違えば、未ステージの変更として出す
+  const index = state.index.filter((f) => !paths.includes(f.path));
+  const workingDir = [...state.workingDir];
+  for (const path of paths) {
+    if (workingDir.some((f) => f.path === path)) continue;
+    const mine = state.work[path];
+    if (mine === undefined) continue;
+    const staged = stage[path];
+    if (staged !== undefined && staged.join('\n') === mine.join('\n')) continue;
+    workingDir.push({
+      path,
+      status: state.tracked.includes(path) ? 'modified' : 'untracked',
+    });
+  }
+
+  return ok(
+    { ...state, stage, index, workingDir },
+    [
+      `${paths.join(', ')} をステージから降ろしました（${spec} の中身に戻しました）。`,
+      'HEAD も枝も動いていません。手元のファイルにも触っていません。',
+      '同じ名前でも、パスを書いたときだけは別のコマンドだと思ってください。',
+    ],
+    ['index', 'workingDir'],
+  );
 }

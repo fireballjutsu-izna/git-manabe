@@ -164,9 +164,14 @@ export function resolveCommit(state: RepoState, spec: string): string | null | '
 /**
  * 名前が枝でもタグでもコミットでもあり得る指定を、コミット id に解決する。
  *
- * `HEAD~2` や `main^` のような「そこから何代さかのぼるか」の書き方も受ける。
+ * `HEAD~2` や `main^` のような「そこからさかのぼる」書き方も受ける。
  * reset を教えるときにいちばん打つのが `git reset HEAD~1` なので、ここは要る。
- * ~ も ^ も第一親をたどる（マージコミットの ^2 のような指定までは踏み込まない）。
+ *
+ * ~ と ^ は別物で、そこがこのサイトの主題の 1 つでもある:
+ *   ~n  第一親を n 代さかのぼる（世代）
+ *   ^n  n 番目の親へ 1 つ行く（親の番号）
+ * ひと筋道の履歴では同じ答えになるが、マージコミットでは食い違う。
+ * HEAD^2 はマージで取り込んだ側の先端で、HEAD~2 は祖父。
  */
 export function resolveRevision(state: RepoState, spec: string): string | null | 'ambiguous' {
   // HEAD@{2} … reflog の 2 つ前。reset をやらかしたあとの戻り道になる
@@ -177,7 +182,7 @@ export function resolveRevision(state: RepoState, spec: string): string | null |
   if (suffix) {
     const start = resolveRevision(state, suffix[1] || 'HEAD');
     if (start === null || start === 'ambiguous') return start;
-    return walkBack(state, start, countSteps(suffix[2]));
+    return walkSuffix(state, start, suffix[2]);
   }
 
   if (spec === 'HEAD') return headCommitId(state);
@@ -207,13 +212,27 @@ function reflogPosition(state: RepoState, n: number): string | null {
   return entry ? entry.from : null;
 }
 
-/** `~2^` のような連なりが、合計で何代さかのぼるかを数える。 */
-function countSteps(suffix: string): number {
-  let steps = 0;
-  for (const part of suffix.matchAll(/([~^])(\d*)/g)) {
-    steps += part[2] === '' ? 1 : Number(part[2]);
+/**
+ * `~2^2` のような連なりを、左から順にたどる。
+ *
+ * ~n は第一親を n 代、^n は n 番目の親へ 1 つ。
+ * ^0 は自分自身（本物と同じ）。行き先が無ければ null。
+ */
+function walkSuffix(state: RepoState, from: string, suffix: string): string | null {
+  let cursor: string | null = from;
+  for (const [, op, digits] of suffix.matchAll(/([~^])(\d*)/g)) {
+    const n = digits === '' ? 1 : Number(digits);
+    if (op === '~') {
+      cursor = walkBack(state, cursor, n);
+    } else {
+      // ^0 はその場に留まる。^n は n 番目の親（1 始まり）
+      if (n === 0) continue;
+      const commit: Commit | undefined = state.commits[cursor];
+      cursor = commit?.parents[n - 1] ?? null;
+    }
+    if (!cursor) return null;
   }
-  return steps;
+  return cursor;
 }
 
 /** 第一親を n 代さかのぼる。根を越えたら null。 */
@@ -426,6 +445,22 @@ export function fail(state: RepoState, error: string, hint?: string): CommandRes
   return { state, log: hint ? [error, hint] : [error], error, touched: [] };
 }
 
+/**
+ * 語をつなぐ。英数字と日本語の境目にだけ、半角スペースを 1 つ入れる。
+ *
+ * `${label}の途中です` のように書くと、label が「マージ」なら自然だが
+ * 「rebase」だと「rebaseの途中です」と詰まる。
+ * サイト全体は「git commit で続けるか」のように必ず空けているので、
+ * ここだけ崩れていた。境目を見て決めれば、どちらの語でも正しくなる。
+ */
+export function joinJa(...parts: string[]): string {
+  return parts.reduce((acc, part) => {
+    if (!acc || !part) return acc || part;
+    const boundary = /[A-Za-z0-9)\]]$/.test(acc) || /^[A-Za-z0-9([]/.test(part);
+    return boundary ? `${acc} ${part}` : `${acc}${part}`;
+  }, '');
+}
+
 /** 止まっている作業の、続け方とやめ方。断り文句にも案内にも使う。 */
 export function pausingWays(kind: 'merge' | 'rebase' | 'cherry-pick'): {
   label: string;
@@ -448,8 +483,45 @@ export function requireNoPause(state: RepoState): CommandResult | null {
   const ways = pausingWays(pausing.kind);
   return fail(
     state,
-    `${ways.label}の途中です。先に決着をつけてください。`,
+    joinJa(ways.label, 'の途中です。先に決着をつけてください。'),
     `ぶつかったファイルを git add してから ${ways.next} か、${ways.abort} でやめられます。`,
+  );
+}
+
+/**
+ * まだ片付いていない変更。
+ *
+ * Git が知らないファイル（untracked / ignored）は数えない ―
+ * それらは取り込みで上書きされないので、止める理由が無い。
+ */
+export function dirtyPaths(state: RepoState): string[] {
+  const paths = [
+    ...state.index.map((f) => f.path),
+    ...state.workingDir
+      .filter((f) => f.status !== 'untracked' && f.status !== 'ignored')
+      .map((f) => f.path),
+  ];
+  return [...new Set(paths)].sort();
+}
+
+/**
+ * 手元が片付いていないなら、取り込みそのものを断る。
+ *
+ * merge・rebase・cherry-pick は、いずれも 3 領域をまるごと入れ替える。
+ * 以前はここに何の判定も無く、**書きかけが黙って消えていた**。
+ *
+ * 本物の Git はもう少し細かく、ぶつからない変更なら持ったまま通す
+ * （rebase だけは常に断る）。ここは 3 つとも断る側に揃えてある ―
+ * 「取り込む前に commit か stash」という手順そのものが、
+ * このサイトで身につけてほしいことなので。
+ */
+export function requireClean(state: RepoState, what: string): CommandResult | null {
+  const dirty = dirtyPaths(state);
+  if (dirty.length === 0) return null;
+  return fail(
+    state,
+    `${dirty.join(', ')} が、まだ片付いていません。`,
+    `${what}は 3 領域を入れ替えるので、このままでは手元の変更が消えます。git commit で確定するか、git stash で脇へどけてください。`,
   );
 }
 

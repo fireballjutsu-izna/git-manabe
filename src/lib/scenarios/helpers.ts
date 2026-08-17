@@ -58,7 +58,7 @@ export function headParents(state: RepoState): number {
   return head ? (state.commits[head]?.parents.length ?? 0) : 0;
 }
 
-/** 3 領域がどちらも空か。 */
+/** 作業ディレクトリとステージが、どちらも空か。 */
 export function areasClean(state: RepoState): boolean {
   return state.workingDir.length === 0 && state.index.length === 0;
 }

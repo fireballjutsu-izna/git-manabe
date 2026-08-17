@@ -220,12 +220,41 @@ describe('止まっている間にできること', () => {
   });
 
   it('もう 1 つマージを始めることはできない', () => {
-    expect(run(paused(), 'git merge feature').error).toContain('もう 1 つ始めることはできません');
+    expect(run(paused(), 'git merge feature').error).toContain('マージの途中です');
   });
 
   it('rebase も cherry-pick も、いまは始められない', () => {
     expect(run(paused(), 'git rebase feature').error).toContain('マージの途中です');
     expect(run(paused(), 'git cherry-pick HEAD').error).toContain('マージの途中です');
+  });
+
+  /*
+   * 断り文句が、止まっているものに合っていること。
+   * merge だけ固定文で「マージの途中です」と言い、そのうえで
+   * この状況では通らない git merge --abort を勧めていた。
+   */
+  it('cherry-pick で止まっているなら、cherry-pick のやめ方を案内する', () => {
+    const base = play([
+      'git init',
+      'touch a.txt 元',
+      'git add .',
+      'git commit -m 根',
+      'git switch -c feature',
+      'edit a.txt 枝で',
+      'git add .',
+      'git commit -m 枝',
+      'git switch main',
+      'edit a.txt 幹で',
+      'git add .',
+      'git commit -m 幹',
+    ]);
+    const stopped = run(base, 'git cherry-pick feature').state;
+    expect(stopped.pausing?.kind).toBe('cherry-pick');
+
+    const refused = run(stopped, 'git merge feature');
+    expect(refused.error).toContain('cherry-pick');
+    expect(refused.log.join('\n')).toContain('git cherry-pick --abort');
+    expect(refused.log.join('\n')).not.toContain('git merge --abort');
   });
 
   it('決着がつく前の commit は断る', () => {

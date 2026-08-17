@@ -1,6 +1,8 @@
 import { applyOnto, pauseWith, restore, snapshot } from '../apply';
-import { hasFlag, type ParsedCommand } from '../parse';
+import { hasFlag, unknownFlags, type ParsedCommand } from '../parse';
 import {
+  requireClean,
+  requireNoPause,
   addCommit,
   currentBranchName,
   fail,
@@ -30,19 +32,41 @@ import type { CommandResult, RepoState } from '../types';
  *   自分が相手の祖先        → fast-forward。**コミットは増えず**、名前が前へ滑るだけ
  *   どちらでもない（分岐）  → 3-way。親を 2 つ持つマージコミットが生まれる
  */
+/** このサイトの merge が読むフラグ。ここに無いものは断る。 */
+const KNOWN_FLAGS = ['--abort'] as const;
+
 export function merge(state: RepoState, command: ParsedCommand): CommandResult {
   const blocked = requireRepo(state);
   if (blocked) return blocked;
 
   // --abort だけは、マージの途中でも受ける（というより、そのためにある）
   if (hasFlag(command, '--abort')) return abort(state);
-  if (state.pausing) {
+
+  /*
+   * 知らないフラグを黙って落とすと、いちばん危ない誤解を作る。
+   * --no-ff を付けたのに fast-forward になり、そのうえで
+   * 「マージコミットは作られていません」と説明してしまう。
+   */
+  const unknown = unknownFlags(command, KNOWN_FLAGS);
+  if (unknown.length > 0) {
     return fail(
       state,
-      'マージの途中です。もう 1 つ始めることはできません。',
-      'ぶつかったファイルを git add してから git commit するか、git merge --abort でやめられます。',
+      `${unknown.join(', ')} は、このサイトの merge では扱えません。`,
+      `使えるのは ${KNOWN_FLAGS.join(' / ')} だけです。本物の Git にあるフラグでも、ここに入っていないものは断ります ― 黙って無視すると、付けたつもりの指定が効かないまま話が進んでしまうので。`,
     );
   }
+  /*
+   * 止まっているのが merge とは限らない。
+   * rebase や cherry-pick の最中に打たれることもあるので、
+   * いま何が止まっているかを見て、そのやめ方・続け方を案内する。
+   * ここを固定文にしていたので、cherry-pick 中でも「マージの途中です」と言い、
+   * そのうえで通らないコマンド（git merge --abort）を勧めていた。
+   */
+  const pausing = requireNoPause(state);
+  if (pausing) return pausing;
+
+  const dirty = requireClean(state, '取り込み');
+  if (dirty) return dirty;
 
   const target = command.positional[0];
   if (!target) {

@@ -159,3 +159,15 @@ export function flagValue(
 export function hasFlag(command: ParsedCommand, ...names: string[]): boolean {
   return names.some((n) => n in command.flags);
 }
+
+/**
+ * 知らないフラグが混ざっていないか。
+ *
+ * 黙って無視すると、**反対のことをしたうえで、それが正しいかのように説明する**。
+ * `git merge --no-ff` がそのままの fast-forward になり、
+ * 「このサイトの --no-ff はマージコミットを作らないのだな」と誤って覚えてしまう。
+ * 扱えないものは扱えないと言うほうが、教材としては安全。
+ */
+export function unknownFlags(command: ParsedCommand, known: readonly string[]): string[] {
+  return Object.keys(command.flags).filter((f) => f.startsWith('-') && !known.includes(f));
+}

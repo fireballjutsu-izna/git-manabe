@@ -207,11 +207,26 @@ async function main(): Promise<void> {
       1,
     );
 
-    // --hard: どちらも空になる
+    /*
+     * --hard: ステージは空になる。作業ディレクトリは、
+     * 追跡しているファイルへの変更だけが消え、Git が知らないファイルは残る
+     * ― 消すには git clean が要る、というのが本物と同じ挙動。
+     * いまここに残っているのは、直前に untracked へ落ちた 1 件。
+     */
     await type(page, 'git reset --hard HEAD');
     check(
-      '--hard で作業ディレクトリも空になる',
-      await page.locator('[data-pane="workingDir"]').getByText('変更はありません').count(),
+      '--hard でステージは空になる',
+      await page.locator('[data-pane="index"]').getByText('空です').count(),
+      1,
+    );
+    check(
+      '--hard でも Git が知らないファイルは残る',
+      await page.locator('[data-pane="workingDir"] code').count(),
+      1,
+    );
+    check(
+      'その消し方も案内する',
+      await countEventually(page, '.xterm-screen >> text=git clean', 1),
       1,
     );
 

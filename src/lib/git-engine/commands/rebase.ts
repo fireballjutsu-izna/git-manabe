@@ -2,6 +2,8 @@ import { applyOnto, pauseWith, restore, snapshot } from '../apply';
 import { replayTodo } from '../interactive';
 import { hasFlag, type ParsedCommand } from '../parse';
 import {
+  joinJa,
+  requireClean,
   addCommit,
   currentBranchName,
   fail,
@@ -56,10 +58,18 @@ export function rebase(state: RepoState, command: ParsedCommand): CommandResult 
   if (state.pausing) {
     return fail(
       state,
-      `${pausingWays(state.pausing.kind).label}の途中です。もう 1 つ始めることはできません。`,
+      joinJa(pausingWays(state.pausing.kind).label, 'の途中です。もう 1 つ始めることはできません。'),
       'git rebase --continue で続けるか、git rebase --abort でやめてください。',
     );
   }
+
+  /*
+   * 本物の Git は、片付いていない変更があると rebase を必ず断る。
+   * 1 つずつ当て直すので、途中で手元の変更と衝突すると収拾がつかなくなるため。
+   * 「rebase の前に stash」はここから来ている。
+   */
+  const dirty = requireClean(state, '置き直し');
+  if (dirty) return dirty;
 
   const spec = command.positional[0];
   if (!spec) {
@@ -314,7 +324,7 @@ function proceed(state: RepoState): CommandResult {
   if (pausing.kind !== 'rebase') {
     return fail(
       state,
-      `いま止まっているのは${pausingWays(pausing.kind).label}です。`,
+      joinJa('いま止まっているのは', pausingWays(pausing.kind).label, 'です。'),
       pausing.kind === 'merge'
         ? '続けるなら git commit です。'
         : `続けるなら git ${pausing.kind} --continue です。`,
@@ -412,7 +422,7 @@ function abort(state: RepoState): CommandResult {
   if (pausing.kind !== 'rebase') {
     return fail(
       state,
-      `いま止まっているのは${pausingWays(pausing.kind).label}です。`,
+      joinJa('いま止まっているのは', pausingWays(pausing.kind).label, 'です。'),
       pausing.kind === 'merge'
         ? 'やめるなら git merge --abort です。'
         : `やめるなら git ${pausing.kind} --abort です。`,
