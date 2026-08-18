@@ -101,7 +101,7 @@ export function status(state: RepoState, command?: ParsedCommand): CommandResult
 
   if (head) {
     const { branches, tags } = refsAt(state, head);
-    const labels = [...branches, ...tags.map((t) => `tag:${t}`)];
+    const labels = [...branches, ...tags.map((t) => `tag: ${t}`)];
     if (labels.length > 1) {
       lines.push('');
       lines.push(`このコミットを指している名前: ${labels.join(', ')}`);

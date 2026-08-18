@@ -9,8 +9,8 @@ import type { CommandResult, FileState, RepoState, StashEntry, Tree } from '../t
  * コミットを 1 つも作らずに、作業中の変更を脇へ置く。
  *
  * このサイトで唯一、**グラフが一切変わらない**コマンド。
- * 動くのは 3 領域だけで、履歴には何の跡も残りません。
- * 「まだコミットしたくないが、いまの手元は片付けたい」ときのための道具です。
+ * 動くのは 3 領域だけで、履歴には何の跡も残らない。
+ * 「まだコミットしたくないが、いまの手元は片付けたい」ときのための道具。
  */
 export function stash(state: RepoState, command: ParsedCommand): CommandResult {
   const blocked = requireRepo(state);

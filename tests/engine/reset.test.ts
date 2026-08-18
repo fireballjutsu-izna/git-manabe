@@ -126,13 +126,27 @@ describe('--mixed（既定）', () => {
 });
 
 describe('--hard', () => {
-  it('ステージも作業ディレクトリも空にする', () => {
-    const before = play([...TWO_COMMITS, 'touch c.txt', 'touch d.txt', 'git add d.txt']);
+  it('ステージを空にし、追跡しているファイルへの変更を消す', () => {
+    const before = play([...TWO_COMMITS, 'edit a.txt 書きかけ', 'touch d.txt', 'git add d.txt']);
     const result = run(before, 'git reset --hard HEAD~1');
 
     expect(result.state.index).toEqual([]);
     expect(result.state.workingDir).toEqual([]);
+    expect(result.state.work['a.txt']).not.toContain('書きかけ');
     expect(result.log.join('\n')).toContain('reflog を使っても戻せません');
+  });
+
+  /*
+   * Git が知らないファイルは、--hard でも消えない。消すには git clean が要る。
+   * 「--hard で全部きれいになる」と覚えると、本物で必ず面食らうところ。
+   */
+  it('Git が知らないファイルは消さない', () => {
+    const before = play([...TWO_COMMITS, 'touch c.txt']);
+    const result = run(before, 'git reset --hard HEAD~1');
+
+    expect(result.state.work['c.txt']).toBeDefined();
+    expect(result.state.workingDir.map((f) => f.path)).toEqual(['c.txt']);
+    expect(result.log.join('\n')).toContain('git clean');
   });
 
   it('取り消したコミットのファイルは tracked から外れる', () => {

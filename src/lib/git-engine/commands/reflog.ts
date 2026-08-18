@@ -6,11 +6,11 @@ import type { CommandResult, RepoState } from '../types';
  *
  * HEAD が通ってきた場所の記録。
  *
- * 枝やタグと違って、これは**自分の手元にしか無い**私的な記録です。
- * だからこそ「どこからも辿れなくなったコミット」への最後の道になります。
- * `git reset --hard` でやらかしたあとに戻れるのは、ここに id が残っているからです。
+ * 枝やタグと違って、これは**自分の手元にしか無い**私的な記録。
+ * だからこそ「どこからも辿れなくなったコミット」への最後の道になる。
+ * `git reset --hard` でやらかしたあとに戻れるのは、ここに id が残っているから。
  *
- * 順番は git に合わせて新しい順。HEAD@{0} がいまいる場所です。
+ * 順番は git に合わせて新しい順。HEAD@{0} がいまいる場所。
  */
 export function reflog(state: RepoState): CommandResult {
   const blocked = requireRepo(state);
@@ -35,7 +35,7 @@ export function reflog(state: RepoState): CommandResult {
   });
 
   lines.push('');
-  lines.push(`${newestFirst.length} 件。HEAD@{0} がいまいる場所です。`);
+  lines.push(`${newestFirst.length} 件。HEAD@{0} がいまいる場所。`);
 
   if (lost.length > 0) {
     lines.push('');

@@ -235,29 +235,57 @@ export function wouldOverwrite(state: RepoState, target: string): CommandResult 
 /**
  * 移動先の中身に入れ替える。
  *
- * 移動先が知らないファイル（untracked）と、
- * 移動先でも同じ中身のファイルへの変更は、そのまま持っていく ― 本物と同じ。
+ * **片付いていない変更は、そのまま持っていく。**
+ * ここへ来る前に wouldOverwrite を通しているので、残っているのは
+ * 「移動先でも同じ中身のファイルへの変更」か「移動先が知らないファイル」だけ ―
+ * どちらも本物の Git は消さずに持ち越す。
+ *
+ * 以前はここで「移動先の tree にあるものは持ち越さない」と早く抜けていた。
+ * ほとんどのファイルは枝をまたいで同じ中身なので、
+ * **ふつうに枝を移るだけで、書きかけが黙って消えていた**。
+ * ステージに載せたぶんも同じで、こちらは本物も載せたまま持ち越す。
  */
 export function carryOver(state: RepoState, target: string): RepoState {
   const there = treeOf(state, target);
   const work = copyTree(there);
-  const keep: FileState[] = [];
+  const stage = copyTree(there);
+  const workingDir: FileState[] = [];
+  const index: FileState[] = [];
 
-  for (const f of [...state.workingDir, ...state.index]) {
-    // 移動先が知らないファイルだけを持ち越す。ステージには載せない
-    if (there[f.path] !== undefined) continue;
-    const mine = state.work[f.path] ?? state.stage[f.path];
-    if (!mine) continue;
+  // ステージに載っているぶん。移動先の中身の上に、こちらの版を重ねる
+  for (const f of state.index) {
+    const mine = state.stage[f.path];
+    if (mine === undefined) {
+      // 「消す」がステージに載っている
+      delete stage[f.path];
+      index.push(f);
+      continue;
+    }
+    stage[f.path] = [...mine];
+    // 移動先が知らないファイルなら、追跡はこれからなので staged
+    index.push(there[f.path] === undefined ? { path: f.path, status: 'staged' } : f);
+  }
+
+  // まだステージに載せていないぶん
+  for (const f of state.workingDir) {
+    const mine = state.work[f.path];
+    if (mine === undefined) continue;
     work[f.path] = [...mine];
-    keep.push({ path: f.path, status: 'untracked' });
+    workingDir.push(f);
+  }
+  // ステージに載せたものは、作業ディレクトリ側にも同じ中身が要る
+  for (const f of index) {
+    if (workingDir.some((w) => w.path === f.path)) continue;
+    const mine = state.work[f.path] ?? state.stage[f.path];
+    if (mine !== undefined) work[f.path] = [...mine];
   }
 
   return {
     ...state,
     work,
-    stage: copyTree(there),
-    index: [],
-    workingDir: keep,
+    stage,
+    index,
+    workingDir,
     tracked: recomputeTracked(state, target),
   };
 }

@@ -145,7 +145,7 @@ export function AreaPanes({
             {!state.initialized
               ? '—'
               : branch && !head
-                ? `${branch}（未誕生）`
+                ? `${branch}（unborn）`
                 : branch
                   ? `${branch} → ${head}`
                   : `detached → ${head}`}

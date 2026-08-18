@@ -75,7 +75,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="mx-auto max-w-6xl px-4 py-8 text-xs leading-relaxed text-muted">
             <p>
               このサイトの Git は<strong className="text-fg">教育用に簡略化したモデル</strong>
-              で、本物の Git を動かしているわけではありません。 正確な仕様は{' '}
+              で、本物の Git を動かしているわけではありません。正確な仕様は{' '}
               <a
                 href="https://git-scm.com/doc"
                 className="text-cyan-neon underline underline-offset-2"

@@ -10,7 +10,7 @@ import type { ConflictFile, Content, Tree } from './types';
  * 教材なので、扱うのは短い行の配列だけ。文字単位の差分までは踏み込まない。
  */
 
-/** touch した直後の中身。2 行あると、差分が「変わった行」と「そのまま の行」に分かれて見える。 */
+/** touch した直後の中身。2 行あると、差分が「変わった行」と「そのままの行」に分かれて見える。 */
 export function defaultContent(path: string): Content {
   // .gitignore は 1 行 1 パターンのファイル。既定の説明行を入れると、
   // それ自体がパターンとして読まれてしまう

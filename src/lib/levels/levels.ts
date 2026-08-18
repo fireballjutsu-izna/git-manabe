@@ -55,7 +55,7 @@ export const LEVELS: Level[] = [
       '.gitignore に書くだけでは止まりません。すでに追跡しているファイルには効かないからです。',
       'touch .gitignore で作り、append .gitignore .env で 1 行足せます。',
       'git rm --cached .env で追跡から外します。--cached を付けると、手元のファイルは残ります。',
-      'あとは git add .gitignore と git commit です。',
+      'あとは git add .gitignore と git commit -m "…" です（コミットにはメッセージが要ります）。',
       '終わったら git diff HEAD~1 HEAD を見てください（HEAD~1 は「1 つ前のコミット」です）。1 つ前のコミットには、まだ .env が入っています。',
     ],
   },
@@ -216,7 +216,7 @@ export const LEVELS: Level[] = [
     id: 'cherry-pick',
     title: 'cherry-pick ― 1 つだけ摘む',
     intro: '枝ごと引っ越すのではなく、欲しいコミットを 1 つだけ持ってきます。',
-    task: 'main へ戻り、feature にある「直したい不具合」だけを持ってきてください。',
+    task: 'いま main にいます。feature にある「直したい不具合」だけを、ここへ持ってきてください。',
     setup: [
       'git init',
       'git commit -m 根',
@@ -235,7 +235,8 @@ export const LEVELS: Level[] = [
       return parent !== undefined && s.commits[parent].message === '根';
     },
     hints: [
-      'git log では feature のコミットは見えません。git switch feature で確かめるか、グラフの id を読んでください。',
+      'git log では feature のコミットは見えません。グラフの id を読むか、git log --all で出せます。',
+      '摘み取りは main にいるまま打ちます。枝を移る必要はありません ― 移ってしまうと、摘んだ先が feature になります。',
       'git cherry-pick <id> です。',
       '「まだ途中」まで持ってこないよう、id を 1 つだけ指定してください。',
     ],
@@ -398,7 +399,7 @@ export const LEVELS: Level[] = [
       'いまいる場所は壊れているので git bisect bad。省略形で、コミットを書かなくて構いません。',
       '動いていたのは最初のコミットです。git log で id を見て、git bisect good <その id> と打ちます。',
       'まん中へ勝手に移ります。cat shop.txt で中身を読んで、「開いています」なら git bisect good、「閉まっています」なら git bisect bad です。',
-      '3 回答えれば見つかります。見つけたあとは git bisect reset で、始める前の枝へ戻れます。',
+      '3 回答えれば見つかります（この時点で合格です）。そのあと git bisect reset を打つと、始める前の枝へ戻れます ― 探索そのものをやめる操作なので、合格の表示も一緒に消えます。',
     ],
   },
   {

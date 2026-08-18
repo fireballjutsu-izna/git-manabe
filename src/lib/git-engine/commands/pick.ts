@@ -1,6 +1,8 @@
 import { applyOnto, applyReverse, pauseWith, restore, snapshot } from '../apply';
 import { hasFlag, type ParsedCommand } from '../parse';
 import {
+  joinJa,
+  requireClean,
   addCommit,
   currentBranchName,
   fail,
@@ -40,10 +42,13 @@ export function cherryPick(state: RepoState, command: ParsedCommand): CommandRes
   if (state.pausing) {
     return fail(
       state,
-      `${pausingWays(state.pausing.kind).label}の途中です。もう 1 つ始めることはできません。`,
+      joinJa(pausingWays(state.pausing.kind).label, 'の途中です。もう 1 つ始めることはできません。'),
       'git cherry-pick --continue で続けるか、git cherry-pick --abort でやめてください。',
     );
   }
+
+  const dirty = requireClean(state, '摘み取り');
+  if (dirty) return dirty;
 
   const specs = command.positional;
   if (specs.length === 0) {
@@ -177,7 +182,7 @@ function proceed(state: RepoState): CommandResult {
   if (pausing.kind !== 'cherry-pick') {
     return fail(
       state,
-      `いま止まっているのは${pausingWays(pausing.kind).label}です。`,
+      joinJa('いま止まっているのは', pausingWays(pausing.kind).label, 'です。'),
       `続けるなら git ${pausing.kind} --continue です。`,
     );
   }
@@ -228,7 +233,7 @@ function abort(state: RepoState): CommandResult {
   if (pausing.kind !== 'cherry-pick') {
     return fail(
       state,
-      `いま止まっているのは${pausingWays(pausing.kind).label}です。`,
+      joinJa('いま止まっているのは', pausingWays(pausing.kind).label, 'です。'),
       `やめるなら git ${pausing.kind} --abort です。`,
     );
   }
@@ -259,6 +264,9 @@ function abort(state: RepoState): CommandResult {
 export function revert(state: RepoState, command: ParsedCommand): CommandResult {
   const blocked = requireRepo(state);
   if (blocked) return blocked;
+
+  const dirty = requireClean(state, '打ち消し');
+  if (dirty) return dirty;
 
   const spec = command.positional[0];
   if (!spec) {

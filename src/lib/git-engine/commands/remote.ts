@@ -91,7 +91,19 @@ function list(state: RepoState, verbose: boolean): CommandResult {
     if (tracking) {
       const { ahead, behind } = aheadBehind(state, local, tracking.target);
       lines.push('');
-      lines.push(`${branch} は ${tracking.name} より ${ahead} 個進み、${behind} 個遅れています。`);
+      /*
+       * 「0 個進み、0 個遅れています」は、push の直後に必ず出るのに
+       * 日本語として据わりが悪い。ずれが無いなら、無いとだけ言う。
+       */
+      if (ahead === 0 && behind === 0) {
+        lines.push(`${branch} と ${tracking.name} は、同じところを指しています。`);
+      } else if (behind === 0) {
+        lines.push(`${branch} は ${tracking.name} より ${ahead} 個進んでいます。`);
+      } else if (ahead === 0) {
+        lines.push(`${branch} は ${tracking.name} より ${behind} 個遅れています。`);
+      } else {
+        lines.push(`${branch} は ${tracking.name} より ${ahead} 個進み、${behind} 個遅れています。`);
+      }
     }
   }
   return ok(state, lines, []);

@@ -1,5 +1,5 @@
 import { changedPaths, copyTree, mergeTrees } from './content';
-import { currentBranchName, headCommitId, ok, pausingWays, treeOf } from './state';
+import { currentBranchName, headCommitId, joinJa, ok, pausingWays, treeOf } from './state';
 import type {
   CommandResult,
   ConflictFile,
@@ -124,7 +124,7 @@ export function pauseWith(
   const lines = [
     `${names.length} 件がぶつかりました: ${names.join(', ')}`,
     '両側が同じ行を変えています。どちらを残すかは Git には決められません。',
-    `${ways.label}は途中で止まっています。壊れてはいません。`,
+    joinJa(ways.label, 'は途中で止まっています。壊れてはいません。'),
     '',
     'ぶつかったファイルには、こういう目印が書き込まれています:',
     ...markerSample(pausing.conflicts[0], pausing),
