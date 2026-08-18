@@ -1,8 +1,19 @@
-import { changedPaths, copyTree, mergeTrees } from './content';
+import {
+  changedPaths,
+  conflictBlocks,
+  copyTree,
+  mergeContent,
+  mergeTrees,
+  OURS_MARK,
+  SPLIT_MARK,
+  THEIRS_MARK,
+  type ConflictKind,
+} from './content';
 import { currentBranchName, headCommitId, joinJa, ok, pausingWays, treeOf } from './state';
 import type {
   CommandResult,
   ConflictFile,
+  Content,
   FileState,
   Pausing,
   RepoState,
@@ -120,23 +131,27 @@ export function pauseWith(
 
   const ways = pausingWays(pausing.kind);
   const names = pausing.conflicts.map((c) => c.path);
+  const first = pausing.conflicts[0];
 
   const lines = [
     `${names.length} 件がぶつかりました: ${names.join(', ')}`,
-    '両側が同じ行を変えています。どちらを残すかは Git には決められません。',
+    ...reasonLines(state, pausing),
     joinJa(ways.label, 'は途中で止まっています。壊れてはいません。'),
+  ];
+
+  if (autoStaged.length > 0) {
+    lines.push(`ぶつからなかった ${autoStaged.length} 件は、もうステージに載っています。`);
+  }
+
+  lines.push(
     '',
-    'ぶつかったファイルには、こういう目印が書き込まれています:',
-    ...markerSample(pausing.conflicts[0], pausing),
+    joinJa(first ? first.path : 'ぶつかったファイル', 'には、こういう目印が書き込まれています:'),
+    ...markerSample(first ? tree[first.path] : undefined, pausing),
     '',
     `目印を消して残す中身を 1 つに決めたら、git add してから ${ways.next} です。`,
     `片側をまるごと選ぶなら git checkout --ours <path> / --theirs <path> が早いです。`,
     `やめるなら ${ways.abort}。始める前の状態に戻ります。`,
-  ];
-
-  if (autoStaged.length > 0) {
-    lines.splice(3, 0, `ぶつからなかった ${autoStaged.length} 件は、もうステージに載っています。`);
-  }
+  );
 
   return ok(
     { ...state, work: copyTree(tree), stage, index, workingDir, pausing },
@@ -145,16 +160,73 @@ export function pauseWith(
   );
 }
 
-/** 目印の見本。実際に書き込まれた中身から、そのまま抜き出す。 */
-function markerSample(conflict: ConflictFile | undefined, pausing: Pausing): string[] {
-  if (!conflict) return [];
-  return [
-    `  <<<<<<< ${oursLabelOf(pausing)}`,
-    ...conflict.ours.slice(0, 2).map((l) => `  ${l}`),
-    '  =======',
-    ...conflict.theirs.slice(0, 2).map((l) => `  ${l}`),
-    `  >>>>>>> ${pausing.from}`,
+/** ぶつかり方ごとの言い分け。「同じ行」と決めつけると、たいていの場合に嘘になる。 */
+const REASONS: Record<ConflictKind, string> = {
+  'file-deleted':
+    '片側がこのファイルを消し、もう片側は中身を変えています。消すか残すかは、Git には決められません。',
+  'line-deleted':
+    '片側が消した行を、もう片側が変えています。消すか残すかは、Git には決められません。',
+  'both-added':
+    '両側が同じ場所に、別々の行を足しています。どちらを先にするかは、Git には決められません。',
+  'same-line':
+    '両側が同じ行を、別々の中身に変えています。どちらを残すかは、Git には決められません。',
+  nearby:
+    '両側が変えた行が隣り合っていて、切り分けられません。間に 1 行でも変えていない行が残っていれば、黙って両方入ります。',
+};
+
+/**
+ * なぜぶつかったのかを、起きたことに合わせて言う。
+ *
+ * 理由はマージし直せば分かる ― pausing.base は、そのとき使った分岐点そのもの。
+ * ConflictFile に理由を持たせるより、ここで引き直すほうが持ち物が増えない。
+ */
+function reasonLines(state: RepoState, pausing: Pausing): string[] {
+  const baseTree = treeOf(state, pausing.base);
+  const kinds: ConflictKind[] = [];
+
+  for (const conflict of pausing.conflicts) {
+    // mergeTrees は、消えた側の中身を空にして渡してくる
+    if (conflict.ours.length === 0 || conflict.theirs.length === 0) {
+      kinds.push('file-deleted');
+      continue;
+    }
+    const merged = mergeContent(baseTree[conflict.path], conflict.ours, conflict.theirs, '', '');
+    kinds.push(...merged.kinds);
+  }
+
+  // 何件ぶつかっても、読ませたいのは理由の種類。同じ理由は 1 度だけ言う
+  return [...new Set(kinds)].slice(0, 3).map((kind) => REASONS[kind]);
+}
+
+/**
+ * 目印の見本。実際に書き込まれた中身から、ぶつかった箇所をそのまま抜き出す。
+ *
+ * 前は各側の先頭 2 行を出していたので、ぶつかった箇所が下のほうにあると
+ * 両側にまったく同じ 2 行が並んだ ― 見比べて選べというのに、違いが見えなかった。
+ */
+function markerSample(content: Content | undefined, pausing: Pausing): string[] {
+  const blocks = conflictBlocks(content);
+  const block = blocks[0];
+  if (!block) return [];
+
+  const lines = [
+    `  ${OURS_MARK} ${oursLabelOf(pausing)}`,
+    ...sampleSide(block.ours),
+    `  ${SPLIT_MARK}`,
+    ...sampleSide(block.theirs),
+    `  ${THEIRS_MARK} ${pausing.from}`,
   ];
+  if (blocks.length > 1) {
+    lines.push(`  （このファイルには、あと ${blocks.length - 1} か所あります）`);
+  }
+  return lines;
+}
+
+/** ターミナルなので、片側が長いときは頭だけ。1 行省くために「ほか 1 行」と書くのは損。 */
+function sampleSide(side: Content): string[] {
+  const head = 3;
+  if (side.length <= head + 1) return side.map((l) => `  ${l}`);
+  return [...side.slice(0, head).map((l) => `  ${l}`), `  …（ほか ${side.length - head} 行）`];
 }
 
 export function oursLabelOf(pausing: Pausing): string {

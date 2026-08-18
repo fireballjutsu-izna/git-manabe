@@ -68,10 +68,30 @@ function conflictBlock(
 
 /* ---- 3 つの中身を 1 つにする ---- */
 
+/**
+ * ぶつかった 1 か所が、どういうぶつかり方をしたか。
+ *
+ * 「止まった」だけを伝えても、次に何をすればいいか分からない。
+ * 本物の git も modify/delete と content を言い分けているので、こちらも分ける。
+ */
+export type ConflictKind =
+  /** 片側がファイルごと消し、もう片側は中身を変えた。 */
+  | 'file-deleted'
+  /** 片側が消した行を、もう片側が変えた。 */
+  | 'line-deleted'
+  /** 両側が、同じ場所に別々の行を足した。 */
+  | 'both-added'
+  /** 両側が、同じ行を別々の中身にした。 */
+  | 'same-line'
+  /** 別々の行だが、隣り合っていて切り分けられない。 */
+  | 'nearby';
+
 export interface MergedContent {
   /** undefined は「そのパスは結果に無い」＝ どちらかが消した、の意味。 */
   content: Content | undefined;
   conflicted: boolean;
+  /** ぶつかった箇所のぶつかり方（前から順に）。ぶつかっていなければ空。 */
+  kinds: ConflictKind[];
 }
 
 /**
@@ -80,8 +100,8 @@ export interface MergedContent {
  * 片側しか変えていなければ、その側を採る ― これが「勝手にマージされた」の正体で、
  * ぶつからないほうが普通だということを、まず動きで見せたい。
  *
- * 両側が変えていても、**違う行**なら両方入る。同じ行だとそこで初めて止まる。
- * ファイル単位で見ていた頃は、この区別ができなかった。
+ * 両側が変えていても、**離れた行**なら両方入る。行数が増えても減っても同じ ―
+ * base からの変更を行のかたまり（ハンク）で捉えて、重ならないものは並べて入れる。
  */
 export function mergeContent(
   base: Content | undefined,
@@ -95,72 +115,204 @@ export function mergeContent(
    * 消したことと、中身が空になったことは別で、
    * 空配列を残すと次のマージで「片方が消した」として必ずぶつかる。
    */
-  if (sameContent(ours, theirs)) return { content: ours, conflicted: false };
+  if (sameContent(ours, theirs)) return { content: ours, conflicted: false, kinds: [] };
   // 片側が触っていない ＝ もう片側の言うとおりにする
-  if (sameContent(base, ours)) return { content: theirs, conflicted: false };
-  if (sameContent(base, theirs)) return { content: ours, conflicted: false };
+  if (sameContent(base, ours)) return { content: theirs, conflicted: false, kinds: [] };
+  if (sameContent(base, theirs)) return { content: ours, conflicted: false, kinds: [] };
 
   // 片方が消して、片方が変えた。どちらを採るかは決められない
   if (!ours || !theirs) {
     return {
       content: conflictBlock(ours ?? ['（削除）'], theirs ?? ['（削除）'], oursLabel, theirsLabel),
       conflicted: true,
+      kinds: ['file-deleted'],
     };
   }
 
-  // 行数が揃っているなら、行ごとに見る。ぶつかった行だけを目印で囲む
-  if (base && base.length === ours.length && base.length === theirs.length) {
-    return mergeLineByLine(base, ours, theirs, oursLabel, theirsLabel);
-  }
-
-  // 行数が変わっているときは、素朴に丸ごとぶつける。
-  // 本物の git ももう少し粘るが、教材としては「両方見せて選ばせる」で足りる
-  return { content: conflictBlock(ours, theirs, oursLabel, theirsLabel), conflicted: true };
+  // base がまだ無い（両側が別々に作った）ときは、空から足したものとして扱う
+  return mergeHunks(base ?? [], ours, theirs, oursLabel, theirsLabel);
 }
 
-function mergeLineByLine(
+/** base の [start, end) を lines で置き換える、という 1 つの変更。start === end なら足しただけ。 */
+interface Hunk {
+  start: number;
+  end: number;
+  lines: Content;
+}
+
+/** base から side への変更を、行のかたまりに分ける。 */
+function hunksOf(base: Content, side: Content): Hunk[] {
+  const hunks: Hunk[] = [];
+  let pos = 0;
+  let current: Hunk | null = null;
+
+  for (const d of diffLines(base, side)) {
+    if (d.op === ' ') {
+      // 変わっていない行が 1 行でも挟まれば、そこでかたまりは切れる
+      current = null;
+      pos += 1;
+      continue;
+    }
+    if (!current) {
+      current = { start: pos, end: pos, lines: [] };
+      hunks.push(current);
+    }
+    if (d.op === '-') {
+      pos += 1;
+      current.end = pos;
+    } else {
+      current.lines.push(d.text);
+    }
+  }
+
+  return hunks;
+}
+
+/** base の [start, end) に、その範囲のハンクを当てた結果。 */
+function applyHunks(base: Content, hunks: Hunk[], start: number, end: number): Content {
+  const out: Content = [];
+  let pos = start;
+  for (const h of hunks) {
+    out.push(...base.slice(pos, h.start));
+    out.push(...h.lines);
+    pos = h.end;
+  }
+  out.push(...base.slice(pos, end));
+  return out;
+}
+
+function kindOf(
+  ourHunks: Hunk[],
+  theirHunks: Hunk[],
+  ourText: Content,
+  theirText: Content,
+): ConflictKind {
+  if (ourText.length === 0 || theirText.length === 0) return 'line-deleted';
+  // 両側とも「足しただけ」なら、消された行も書き換えられた行も無い
+  if ([...ourHunks, ...theirHunks].every((h) => h.start === h.end)) return 'both-added';
+
+  const sameRange =
+    ourHunks[0].start === theirHunks[0].start &&
+    ourHunks[ourHunks.length - 1].end === theirHunks[theirHunks.length - 1].end;
+  return sameRange ? 'same-line' : 'nearby';
+}
+
+/**
+ * base からの変更どうしを突き合わせて、重ならないものは両方入れる。
+ *
+ * 重なりの判定は本物の git（xdiff）に合わせて、**触れ合ったら重なり**とする ―
+ * 変更と変更の間に、変わっていない行が 1 行も無ければぶつける。
+ * 実際、隣り合う行を両側で変えると本物の git も止まるので、
+ * ここを「範囲が交わったときだけ」に緩めると本物より通してしまう。
+ */
+function mergeHunks(
   base: Content,
   ours: Content,
   theirs: Content,
   oursLabel: string,
   theirsLabel: string,
 ): MergedContent {
+  const oursHunks = hunksOf(base, ours);
+  const theirsHunks = hunksOf(base, theirs);
+
   const out: Content = [];
-  let conflicted = false;
+  const kinds: ConflictKind[] = [];
+  let pos = 0;
+  let oi = 0;
+  let ti = 0;
 
-  // ぶつかった行が続くときは、1 つの塊にまとめる（目印だらけにしない）
-  let runOurs: string[] = [];
-  let runTheirs: string[] = [];
-  const flush = (): void => {
-    if (runOurs.length === 0) return;
-    out.push(...conflictBlock(runOurs, runTheirs, oursLabel, theirsLabel));
-    runOurs = [];
-    runTheirs = [];
-  };
+  while (oi < oursHunks.length || ti < theirsHunks.length) {
+    const takeOurs =
+      ti >= theirsHunks.length ||
+      (oi < oursHunks.length && oursHunks[oi].start <= theirsHunks[ti].start);
+    const first = takeOurs ? oursHunks[oi] : theirsHunks[ti];
+    const start = first.start;
+    let end = first.end;
 
-  for (let i = 0; i < base.length; i += 1) {
-    const b = base[i];
-    const o = ours[i];
-    const t = theirs[i];
-
-    if (o === t) {
-      flush();
-      out.push(o);
-    } else if (o === b) {
-      flush();
-      out.push(t);
-    } else if (t === b) {
-      flush();
-      out.push(o);
+    const ourGroup: Hunk[] = [];
+    const theirGroup: Hunk[] = [];
+    if (takeOurs) {
+      ourGroup.push(oursHunks[oi]);
+      oi += 1;
     } else {
-      conflicted = true;
-      runOurs.push(o);
-      runTheirs.push(t);
+      theirGroup.push(theirsHunks[ti]);
+      ti += 1;
+    }
+
+    // 触れ合っているものを、伸びなくなるまで取り込む
+    for (;;) {
+      let grew = false;
+      while (oi < oursHunks.length && oursHunks[oi].start <= end) {
+        end = Math.max(end, oursHunks[oi].end);
+        ourGroup.push(oursHunks[oi]);
+        oi += 1;
+        grew = true;
+      }
+      while (ti < theirsHunks.length && theirsHunks[ti].start <= end) {
+        end = Math.max(end, theirsHunks[ti].end);
+        theirGroup.push(theirsHunks[ti]);
+        ti += 1;
+        grew = true;
+      }
+      if (!grew) break;
+    }
+
+    out.push(...base.slice(pos, start));
+    pos = end;
+
+    // 片側しか触っていない範囲は、そのまま採る ― これがいちばん多い
+    if (theirGroup.length === 0) {
+      out.push(...applyHunks(base, ourGroup, start, end));
+      continue;
+    }
+    if (ourGroup.length === 0) {
+      out.push(...applyHunks(base, theirGroup, start, end));
+      continue;
+    }
+
+    const ourText = applyHunks(base, ourGroup, start, end);
+    const theirText = applyHunks(base, theirGroup, start, end);
+    // 同じ場所を、たまたま同じ中身にしていた。決められないことは何も無い
+    if (sameContent(ourText, theirText)) {
+      out.push(...ourText);
+      continue;
+    }
+
+    kinds.push(kindOf(ourGroup, theirGroup, ourText, theirText));
+    out.push(...conflictBlock(ourText, theirText, oursLabel, theirsLabel));
+  }
+
+  out.push(...base.slice(pos));
+
+  return { content: out, conflicted: kinds.length > 0, kinds };
+}
+
+/** 書き込まれた目印から、両側の中身を取り出す。1 ファイルに何か所あってもいい。 */
+export interface ConflictBlock {
+  ours: Content;
+  theirs: Content;
+}
+
+export function conflictBlocks(content: Content | undefined): ConflictBlock[] {
+  const blocks: ConflictBlock[] = [];
+  let current: ConflictBlock | null = null;
+  let side: 'ours' | 'theirs' = 'ours';
+
+  for (const line of content ?? []) {
+    if (line.startsWith(OURS_MARK)) {
+      current = { ours: [], theirs: [] };
+      side = 'ours';
+    } else if (line === SPLIT_MARK && current) {
+      side = 'theirs';
+    } else if (line.startsWith(THEIRS_MARK) && current) {
+      blocks.push(current);
+      current = null;
+    } else if (current) {
+      current[side].push(line);
     }
   }
-  flush();
 
-  return { content: out, conflicted };
+  return blocks;
 }
 
 export interface MergedTree {

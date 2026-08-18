@@ -83,27 +83,71 @@ describe('ぶつかるかどうかの判定', () => {
 
   it('同じファイルでも、違う行なら止まらずに両方入る', () => {
     /*
-     * ここがファイル単位だった頃との違い。
-     * 1 行目を片側が、2 行目をもう片側が変えている。
-     * 本物の Git はこれを黙って 1 つにする ― 止まるほうが例外だと分かる。
+     * ここがファイル単位だった頃との違い。記事が言い切っている行なので固定する。
+     *
+     * 前の期待値は枝を進めただけの fast-forward で、
+     * 3-way マージを 1 度も通っていなかった ― 何も確かめていなかった。
+     * いまは片側が 1 行目を直し、もう片側が末尾に 1 行足している。
+     * 間に「（ここに中身を書きます）」が丸ごと残るので、変更は離れている。
      */
     const state = play([
       'git init',
-      'touch a.txt',
+      'touch a.txt 元の1行目',
       'git add .',
       'git commit -m 根',
       'git switch -c feature',
-      // 2 行目を差し替えるために、いったん 1 行目に何か書いてから丸ごと置く
-      'edit a.txt 1 行目',
+      'append a.txt 枝が足した行',
       'git add .',
-      'git commit -m 下ごしらえ',
+      'git commit -m 枝で足す',
       'git switch main',
+      'edit a.txt 幹が直した',
+      'git add .',
+      'git commit -m 幹で直す',
       'git merge feature',
     ]);
 
-    const result = run(state, 'git status');
-    expect(result.error).toBeUndefined();
     expect(state.pausing).toBeNull();
+    // 両側の変更が、どちらも入っている
+    expect(state.work['a.txt']).toEqual([
+      '幹が直した',
+      '（ここに中身を書きます）',
+      '枝が足した行',
+    ]);
+    expect(state.workingDir).toEqual([]);
+  });
+
+  it('両側が末尾に別々の行を足すと、足す場所が同じなので止まる', () => {
+    /*
+     * 「別々の行」に見えるが、どちらも末尾に割り込んでいるので場所は同じ。
+     * 本物の git 2.43.0 も、この形は CONFLICT (content) で止める。
+     */
+    const state = play([
+      'git init',
+      'touch a.txt 元の1行目',
+      'git add .',
+      'git commit -m 根',
+      'git switch -c feature',
+      'append a.txt 枝が足した行',
+      'git add .',
+      'git commit -m 枝',
+      'git switch main',
+      'append a.txt 幹が足した行',
+      'git add .',
+      'git commit -m 幹',
+      'git merge feature',
+    ]);
+
+    expect(conflictPaths(state)).toEqual(['a.txt']);
+    // ぶつかったのは足した 1 行だけで、元の 2 行は目印の外に残る
+    expect(state.work['a.txt']).toEqual([
+      '元の1行目',
+      '（ここに中身を書きます）',
+      '<<<<<<< HEAD',
+      '幹が足した行',
+      '=======',
+      '枝が足した行',
+      '>>>>>>> feature',
+    ]);
   });
 
   it('止まってもコミットは増えない', () => {
@@ -153,6 +197,160 @@ describe('目印が書き込まれる', () => {
     expect(text).toContain('+=======');
     expect(text).toContain('+枝の花');
     expect(text).toContain('+>>>>>>> feature');
+  });
+});
+
+/**
+ * 止まったときの説明。
+ *
+ * 「両側が同じ行を変えています」と決め打ちしていた頃は、
+ * 別々の行を足しただけのときも、片側が消しただけのときも同じ文を出していた ―
+ * エンジンが自分で嘘をついていた。ぶつかり方ごとに言い分ける。
+ */
+describe('止まった理由の説明', () => {
+  it('同じ行を変えたときは、同じ行だと言う', () => {
+    const text = run(play(CLASHING), 'git merge feature').log.join('\n');
+    expect(text).toContain('両側が同じ行を、別々の中身に変えています');
+  });
+
+  it('別々の行を同じ場所に足したときは、足したと言う', () => {
+    const text = run(
+      play([
+        'git init',
+        'touch a.txt 元の1行目',
+        'git add .',
+        'git commit -m 根',
+        'git switch -c feature',
+        'append a.txt 枝が足した行',
+        'git add .',
+        'git commit -m 枝',
+        'git switch main',
+        'append a.txt 幹が足した行',
+        'git add .',
+        'git commit -m 幹',
+      ]),
+      'git merge feature',
+    ).log.join('\n');
+
+    expect(text).toContain('両側が同じ場所に、別々の行を足しています');
+    expect(text).not.toContain('同じ行を、別々の中身に');
+  });
+
+  it('片側が消して片側が変えたときは、消すか残すかだと言う', () => {
+    const text = run(
+      play([
+        'git init',
+        'touch a.txt 元の1行目',
+        'git add .',
+        'git commit -m 根',
+        'git switch -c feature',
+        'edit a.txt 枝が直した',
+        'git add .',
+        'git commit -m 枝',
+        'git switch main',
+        'git rm a.txt',
+        'git commit -m 消した',
+      ]),
+      'git merge feature',
+    ).log.join('\n');
+
+    expect(text).toContain('片側がこのファイルを消し');
+    expect(text).not.toContain('同じ行を、別々の中身に');
+  });
+
+  it('理由が 2 通りなら、2 通りとも言う', () => {
+    const text = run(
+      play([
+        'git init',
+        'touch a.txt 元',
+        'touch b.txt 元',
+        'git add .',
+        'git commit -m 根',
+        'git switch -c feature',
+        'edit a.txt 枝の a',
+        'append b.txt 枝が足した',
+        'git add .',
+        'git commit -m 枝',
+        'git switch main',
+        'edit a.txt 幹の a',
+        'append b.txt 幹が足した',
+        'git add .',
+        'git commit -m 幹',
+      ]),
+      'git merge feature',
+    ).log.join('\n');
+
+    expect(text).toContain('両側が同じ行を、別々の中身に変えています');
+    expect(text).toContain('両側が同じ場所に、別々の行を足しています');
+  });
+});
+
+/**
+ * 目印の見本。
+ *
+ * 各側の先頭 2 行を出していた頃は、ぶつかった箇所がファイルの下のほうにあると
+ * 見本の両側がまったく同じ 2 行になった ―
+ * 「どちらを残すか決めて」と言いながら、違いが見えていなかった。
+ */
+describe('目印の見本', () => {
+  /** 4 行あるファイルの、末尾どうしがぶつかる形。違いは最後の 1 行だけ。 */
+  const DEEP = [
+    'git init',
+    'touch v.txt 一',
+    'append v.txt 三',
+    'append v.txt 四',
+    'git add .',
+    'git commit -m 根',
+    'git switch -c feature',
+    'append v.txt 枝が足した行',
+    'git add .',
+    'git commit -m 枝',
+    'git switch main',
+    'append v.txt 幹が足した行',
+    'git add .',
+    'git commit -m 幹',
+  ];
+
+  it('下のほうでぶつかっても、違う行が見本に出る', () => {
+    const text = run(play(DEEP), 'git merge feature').log.join('\n');
+    expect(text).toContain('  幹が足した行');
+    expect(text).toContain('  枝が足した行');
+    // 両側に同じ「一」「三」が並ぶことはもう無い
+    expect(text).not.toContain('  一');
+    expect(text).not.toContain('  三');
+  });
+
+  it('どのファイルの見本かを言う', () => {
+    // ファイル名は英数字で終わるので、そのあとに半角スペースが 1 つ入る
+    expect(run(play(DEEP), 'git merge feature').log.join('\n')).toContain(
+      'v.txt には、こういう目印が',
+    );
+  });
+
+  it('片側が長いときは、頭だけ出して残りは行数で言う', () => {
+    // 消した側と残した側。残した側は 5 行あるので、全部は出さない
+    const text = run(
+      play([
+        'git init',
+        'touch v.txt 一',
+        'append v.txt 三',
+        'append v.txt 四',
+        'append v.txt 五',
+        'git add .',
+        'git commit -m 根',
+        'git switch -c feature',
+        'edit v.txt 枝が直した',
+        'git add .',
+        'git commit -m 枝',
+        'git switch main',
+        'git rm v.txt',
+        'git commit -m 消した',
+      ]),
+      'git merge feature',
+    ).log.join('\n');
+
+    expect(text).toContain('  枝が直した');
+    expect(text).toContain('…（ほか 2 行）');
   });
 });
 

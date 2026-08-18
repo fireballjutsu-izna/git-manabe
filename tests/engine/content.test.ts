@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { emptyState, headCommitId, run, type RepoState } from '@/lib/git-engine';
+// mergeContent は入口（index）から出していないので、直に読む
+import { mergeContent } from '@/lib/git-engine/content';
 
 /**
  * ファイルの中身。
@@ -354,5 +356,138 @@ describe('revert は中身を戻す', () => {
     expect(tree(state)['a.txt'][0]).toBe('元');
     // 履歴は消えていない
     expect(Object.keys(state.commits)).toHaveLength(3);
+  });
+});
+
+/**
+ * 3-way マージそのもの。
+ *
+ * ここに並ぶ 11 件は、本物の git（2.43.0）で同じ 3 つの版を作って
+ * merge させ、出てきた v.txt をそのまま期待値にしている ―
+ * 行数が変わると丸ごとぶつけていた頃は、上 5 件が全部ぶつかっていた。
+ *
+ * 重なりの判定が「触れ合ったらぶつける」なのも本物に合わせたもの。
+ * 変更と変更の間に、変わっていない行が 1 行でも残っていれば通る。
+ */
+describe('mergeContent（本物の git と突き合わせた）', () => {
+  const merge = (base: string[] | undefined, ours: string[], theirs: string[]) =>
+    mergeContent(base, ours, theirs, 'HEAD', 'feature');
+
+  it('両側が末尾に別々の行を足すと、本物と同じくぶつかる', () => {
+    // 足す場所が同じ（どちらも末尾）なので、本物の git も CONFLICT を出す
+    const r = merge(['1行目'], ['1行目', '幹が足した行'], ['1行目', '枝が足した行']);
+    expect(r.conflicted).toBe(true);
+    expect(r.kinds).toEqual(['both-added']);
+    expect(r.content).toEqual([
+      '1行目',
+      '<<<<<<< HEAD',
+      '幹が足した行',
+      '=======',
+      '枝が足した行',
+      '>>>>>>> feature',
+    ]);
+  });
+
+  it('両側が先頭に別々の行を足しても、同じくぶつかる', () => {
+    const r = merge(['1行目'], ['幹が足した行', '1行目'], ['枝が足した行', '1行目']);
+    expect(r.kinds).toEqual(['both-added']);
+    expect(r.content?.[0]).toBe('<<<<<<< HEAD');
+    expect(r.content?.at(-1)).toBe('1行目');
+  });
+
+  it('片側が上、片側が下なら、行数が変わっても黙って両方入る', () => {
+    const base = ['a', 'b', 'c', 'd', 'e', 'f'];
+    const r = merge(base, ['a幹', 'b', 'c', 'd', 'e', 'f'], ['a', 'b', 'c', 'd', 'e', 'f枝']);
+    expect(r.conflicted).toBe(false);
+    expect(r.content).toEqual(['a幹', 'b', 'c', 'd', 'e', 'f枝']);
+  });
+
+  it('片側が行を足し、片側が離れた行を直しても、両方入る', () => {
+    const base = ['a', 'b', 'c', 'd', 'e'];
+    const r = merge(base, ['a', 'X', 'b', 'c', 'd', 'e'], ['a', 'b', 'c幹', 'd', 'e']);
+    expect(r.conflicted).toBe(false);
+    expect(r.content).toEqual(['a', 'X', 'b', 'c幹', 'd', 'e']);
+  });
+
+  it('変更が 1 行離れていれば通る', () => {
+    const base = ['a', 'b', 'c', 'd', 'e'];
+    const r = merge(base, ['a', 'b幹', 'c', 'd', 'e'], ['a', 'b', 'c', 'd枝', 'e']);
+    expect(r.conflicted).toBe(false);
+    expect(r.content).toEqual(['a', 'b幹', 'c', 'd枝', 'e']);
+  });
+
+  it('変更が隣り合っていると、別々の行でもぶつかる', () => {
+    // 本物の git も、間に変わっていない行が無いとここで止まる
+    const r = merge(['a', 'b', 'c', 'd'], ['a', 'b幹', 'c', 'd'], ['a', 'b', 'c枝', 'd']);
+    expect(r.kinds).toEqual(['nearby']);
+    expect(r.content).toEqual([
+      'a',
+      '<<<<<<< HEAD',
+      'b幹',
+      'c',
+      '=======',
+      'b',
+      'c枝',
+      '>>>>>>> feature',
+      'd',
+    ]);
+  });
+
+  it('足した行と、そのすぐ下の行への変更もぶつかる', () => {
+    const base = ['a', 'b', 'c', 'd', 'e'];
+    const r = merge(base, ['a', 'X', 'b', 'c', 'd', 'e'], ['a', 'b幹', 'c', 'd', 'e']);
+    expect(r.kinds).toEqual(['nearby']);
+    expect(r.content).toEqual([
+      'a',
+      '<<<<<<< HEAD',
+      'X',
+      'b',
+      '=======',
+      'b幹',
+      '>>>>>>> feature',
+      'c',
+      'd',
+      'e',
+    ]);
+  });
+
+  it('両側が同じ行を違う中身にすると、その行だけを囲む', () => {
+    const r = merge(['a', 'b', 'c'], ['a', 'b幹', 'c'], ['a', 'b枝', 'c']);
+    expect(r.kinds).toEqual(['same-line']);
+    expect(r.content).toEqual([
+      'a',
+      '<<<<<<< HEAD',
+      'b幹',
+      '=======',
+      'b枝',
+      '>>>>>>> feature',
+      'c',
+    ]);
+  });
+
+  it('片側が消した行を片側が直すと、こちら側が空のまま囲まれる', () => {
+    // 本物の git も、消えた側には 1 行も書かない
+    const r = merge(['a', 'b', 'c'], ['a', 'c'], ['a', 'b枝', 'c']);
+    expect(r.kinds).toEqual(['line-deleted']);
+    expect(r.content).toEqual(['a', '<<<<<<< HEAD', '=======', 'b枝', '>>>>>>> feature', 'c']);
+  });
+
+  it('両側が同じ行を同じ中身に直したなら、ぶつからない', () => {
+    const r = merge(['a', 'b', 'c'], ['a', 'bどちらも', 'c'], ['a', 'bどちらも', 'c']);
+    expect(r.conflicted).toBe(false);
+    expect(r.content).toEqual(['a', 'bどちらも', 'c']);
+  });
+
+  it('両側が同じ行を足したなら、1 行だけ入る', () => {
+    const r = merge(['a'], ['a', '同じ行'], ['a', '同じ行']);
+    expect(r.conflicted).toBe(false);
+    expect(r.content).toEqual(['a', '同じ行']);
+  });
+
+  it('離れた 2 か所は、それぞれ別々に囲まれる', () => {
+    const base = ['a', 'b', 'c', 'd', 'e'];
+    const r = merge(base, ['a幹', 'b', 'c', 'd', 'e幹'], ['a枝', 'b', 'c', 'd', 'e枝']);
+    expect(r.kinds).toEqual(['same-line', 'same-line']);
+    expect(r.content?.filter((l) => l === '=======')).toHaveLength(2);
   });
 });
