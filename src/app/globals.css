@@ -79,6 +79,22 @@
   --lane-4: #e08fa6;
   --lane-5: #79c9cf;
 
+  /*
+   * bisect の判定。
+   *
+   * ref の色（枝・HEAD・タグ…）とは意味の層が違う ―
+   * 「動く／壊れている」は Git の言葉ではなく、そのプロジェクトの話なので、
+   * ref の色を流用せず、専用に持つ。バッジには記号と日本語も併せて出すので、
+   * 色が見分けにくくても意味は取れる。
+   * 実測（vs --bg-sunken）: good 9.26 / bad 7.32。
+   */
+  --bisect-good: #58c39a;
+  --bisect-bad: #ef7a68;
+  --tint-bisect-good: rgb(88 195 154 / 10%);
+  --tint-bisect-bad: rgb(239 122 104 / 10%);
+  /* まだ調べていない範囲に敷く帯。行の下地なので、うんと薄く */
+  --bisect-range: rgb(255 209 102 / 7%);
+
   /* 3 領域。add / commit がどこを書き換えたかを、この色で光らせる */
   --area-working: var(--neon-rose);
   --area-index: var(--neon-amber);
@@ -129,6 +145,13 @@
 
   --commit: #3a3a52;
   --commit-dim: #6a6a86; /* 実測 4.52（vs --bg-sunken） */
+
+  /* 白い下地でも読める明度へ。実測（vs --bg-sunken）: good 4.60 / bad 5.19 */
+  --bisect-good: #157a58;
+  --bisect-bad: #b13a26;
+  --tint-bisect-good: rgb(21 122 88 / 9%);
+  --tint-bisect-bad: rgb(177 58 38 / 9%);
+  --bisect-range: rgb(138 97 0 / 8%);
 
   /* 白い下地でも読める明度に落としたレーン色。実測（vs --bg-sunken）はいずれも 5.5 以上 */
   --lane-0: #41557d;
@@ -183,6 +206,8 @@
   --color-tag: var(--tag);
   --color-detached: var(--detached);
   --color-remote: var(--remote);
+  --color-bisect-good: var(--bisect-good);
+  --color-bisect-bad: var(--bisect-bad);
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);

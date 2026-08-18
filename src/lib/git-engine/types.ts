@@ -198,6 +198,37 @@ export interface Pausing {
 }
 
 /**
+ * 二分探索の途中。
+ *
+ * `git bisect` は「いつ壊れたか」を、履歴を半分に割りながら探す。
+ * 100 個のコミットでも 7 回で 1 個に絞れる ― 1 つずつ戻して試すのとの差が、
+ * このコマンドの値打ちそのものなので、残り何個・あと何回を毎回言う。
+ *
+ * 持ち方は本物と同じで、**悪いのは 1 つ・良いのは何個でも**。
+ * 悪いほうは新しい側の上限で、良いほうは古い側の下限になり、
+ * 探す範囲は「bad の祖先から good の祖先を除いたもの」に決まる。
+ */
+export interface Bisect {
+  /** 壊れていると判っているコミットのうち、いちばん古いもの。まだなら null。 */
+  bad: string | null;
+  /**
+   * これまでに打った判定。
+   *
+   * 範囲から外れたぶんも捨てずに取っておく ―
+   * グラフに「ここは調べ済み」と出しておかないと、絞り込みが絵にならない。
+   */
+  verdicts: Record<string, 'good' | 'bad' | 'skip'>;
+  /** いま調べてほしいコミット。範囲がまだ決まっていなければ null。 */
+  testing: string | null;
+  /** 見つかった「最初に壊れたコミット」。決まるまで null。 */
+  culprit: string | null;
+  /** 始める前にいた場所。git bisect reset で戻る。 */
+  saved: Head;
+  /** 打った順の記録。git bisect log で出す。 */
+  entries: string[];
+}
+
+/**
  * もう 1 つのリポジトリ。
  *
  * 手元とは別の入れ物として持つ。これが要点で、
@@ -267,6 +298,8 @@ export interface RepoState {
   pausing: Pausing | null;
   /** 対話的 rebase の計画を立てている最中なら、その todo。 */
   todo: Todo | null;
+  /** 二分探索の最中なら、その途中経過。 */
+  bisect: Bisect | null;
   reflog: ReflogEntry[];
   /** id の採番と createdAt の元になる単調カウンタ。Math.random() は使わない。 */
   seq: number;

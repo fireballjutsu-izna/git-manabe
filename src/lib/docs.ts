@@ -88,6 +88,12 @@ export const DOCS: Doc[] = [
     summary: '失くしたコミットへの最後の道。HEAD が通ってきた道は全部残っている',
   },
   {
+    id: 'bisect',
+    title: 'bisect ― いつ壊れたかを探す',
+    summary:
+      '1 つずつ戻せば最悪 60 回。半分に割れば 6 回。bad と good で挟んだ内側が、探す範囲になる',
+  },
+  {
     id: 'remote',
     title: 'リモート ― fetch と pull',
     summary: '向こうのコミットは、fetch するまでこちらに存在しない。見えないのではなく、無い',

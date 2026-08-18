@@ -154,7 +154,59 @@ export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?
     now({ label: ways.abort, line: ways.abort, hint: '始める前に戻す', weight: 2 });
     now({ label: 'git status', line: 'git status', weight: 3 });
     now({ label: 'git diff', line: 'git diff', hint: 'ぶつかった中身を見る', weight: 3 });
+    for (const c of state.pausing.conflicts) {
+      more({ label: `cat ${c.path}`, line: `cat ${c.path}`, hint: '目印ごと中身を読む' });
+    }
     more({ label: 'git log', line: 'git log' });
+  } else if (state.bisect) {
+    /*
+     * 二分探索の最中。ここで打つことは 3 つしかない ―
+     * 中身を見る、good か bad を答える、やめる。
+     * 木を伸ばすボタンをここに並べても、押す先が detached HEAD なので邪魔にしかならない。
+     */
+    const b = state.bisect;
+
+    if (b.culprit) {
+      now({
+        label: 'git bisect reset',
+        line: 'git bisect reset',
+        hint: '始める前の枝へ戻る',
+        weight: 0,
+      });
+      now({ label: 'git log --oneline', line: 'git log --oneline', weight: 1 });
+    } else if (b.testing) {
+      // 判定するには中身を読まないといけない。読む手段をいちばん前に置く
+      for (const path of Object.keys(state.work).sort().slice(0, 2)) {
+        now({ label: `cat ${path}`, line: `cat ${path}`, hint: '中身を見る', weight: 0 });
+      }
+      now({ label: 'git bisect good', line: 'git bisect good', hint: 'ここは動く', weight: 1 });
+      now({ label: 'git bisect bad', line: 'git bisect bad', hint: 'ここは壊れている', weight: 1 });
+      now({ label: 'git bisect reset', line: 'git bisect reset', hint: 'やめる', weight: 4 });
+      more({ label: 'git bisect skip', line: 'git bisect skip', hint: '判定できない版' });
+      more({ label: 'git bisect log', line: 'git bisect log', hint: 'これまでの判定' });
+    } else {
+      // まだ範囲が決まっていない。足りないほうだけを出す
+      if (!b.bad) {
+        now({
+          label: 'git bisect bad',
+          line: 'git bisect bad',
+          hint: 'いまここは壊れている',
+          weight: 0,
+        });
+      } else {
+        const oldest = Object.values(state.commits).sort((x, y) => x.createdAt - y.createdAt)[0];
+        if (oldest) {
+          now({
+            label: `git bisect good ${oldest.id}`,
+            line: `git bisect good ${oldest.id}`,
+            hint: 'ここは動いていた',
+            weight: 0,
+          });
+        }
+      }
+      now({ label: 'git log --oneline', line: 'git log --oneline', hint: 'id を確かめる', weight: 1 });
+      now({ label: 'git bisect reset', line: 'git bisect reset', hint: 'やめる', weight: 3 });
+    }
   } else {
     /*
      * 課題が名前を指定しているなら、それを出す。
@@ -415,6 +467,14 @@ export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?
       });
     }
     more({ label: 'git log --all', line: 'git log --all', hint: '辿れないものも出す' });
+    // 探すものが無いと意味が出ないので、履歴がある程度たまってから出す
+    if (Object.keys(state.commits).length >= 4) {
+      more({
+        label: 'git bisect start',
+        line: 'git bisect start',
+        hint: 'いつ壊れたかを半分ずつ探す',
+      });
+    }
     if (head) {
       more({
         label: `git tag ${nextTag(state)}`,

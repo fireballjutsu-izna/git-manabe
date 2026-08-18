@@ -8,11 +8,12 @@ import {
 import { refreshIgnored } from './ignore';
 import { fail, requireNoPause } from './state';
 import { add } from './commands/add';
+import { bisect } from './commands/bisect';
 import { branch } from './commands/branch';
 import { checkout, switchCommand } from './commands/checkout';
 import { commit } from './commands/commit';
 import { diff } from './commands/diff';
-import { append, edit, touch } from './commands/files';
+import { append, cat, edit, touch } from './commands/files';
 import { init } from './commands/init';
 import { log } from './commands/log';
 import { merge } from './commands/merge';
@@ -46,6 +47,7 @@ const GIT_HANDLERS: Record<string, Handler> = {
   stash,
   reflog,
   tag,
+  bisect,
   remote,
   push,
   fetch,
@@ -60,6 +62,7 @@ const HELPER_HANDLERS: Record<string, Handler> = {
   touch,
   edit,
   append,
+  cat,
   todo,
   teammate,
 };
@@ -74,6 +77,7 @@ const HELPER_HANDLERS: Record<string, Handler> = {
  * 見るだけのコマンド（status / log / diff / reflog / branch）と、
  * 決着に要るもの（add / commit / --continue / --abort / touch / edit /
  * checkout --ours・--theirs）だけを通す。
+ * cat も通す ― ぶつかったファイルを開いて目印を読むのは、決着の第一歩なので。
  */
 const ALLOWED_WHILE_PAUSED = new Set([
   'add',
@@ -89,6 +93,7 @@ const ALLOWED_WHILE_PAUSED = new Set([
   'branch',
   'touch',
   'edit',
+  'cat',
 ]);
 
 /**
@@ -104,6 +109,7 @@ const ALLOWED_WHILE_PLANNING = new Set([
   'log',
   'diff',
   'branch',
+  'cat',
 ]);
 
 /**

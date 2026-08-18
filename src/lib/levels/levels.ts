@@ -350,6 +350,58 @@ export const LEVELS: Level[] = [
     ],
   },
   {
+    id: 'bisect',
+    title: 'bisect ― いつ壊れたかを半分ずつ探す',
+    intro:
+      '8 個のコミットのどこかで、店の表示が「閉まっています」に変わってしまいました。1 つずつ戻せば最悪 8 回ですが、半分に割れば 3 回で見つかります。',
+    task:
+      'git bisect で、shop.txt が「閉まっています」になった最初のコミットを見つけてください。移った先の中身は cat shop.txt で読めます。',
+    setup: [
+      'git init',
+      'touch shop.txt 開いています',
+      'touch notes.txt 品出しのメモ',
+      'git add .',
+      'git commit -m 開店',
+      'edit notes.txt 品書きを直した',
+      'git add .',
+      'git commit -m 品書きを直した',
+      'edit notes.txt 写真を差し替えた',
+      'git add .',
+      'git commit -m 写真を差し替えた',
+      // ここで壊れる。以降は直さない
+      'edit notes.txt 営業時間を書き換えた',
+      'edit shop.txt 閉まっています',
+      'git add .',
+      'git commit -m 営業時間を書き換えた',
+      'edit notes.txt 送料の説明を足した',
+      'git add .',
+      'git commit -m 送料の説明を足した',
+      'edit notes.txt 表記ゆれを直した',
+      'git add .',
+      'git commit -m 表記ゆれを直した',
+      'edit notes.txt 定休日を書いた',
+      'git add .',
+      'git commit -m 定休日を書いた',
+      'edit notes.txt 問い合わせ先を直した',
+      'git add .',
+      'git commit -m 問い合わせ先を直した',
+    ],
+    // 形は 1 つも変わらない（コミットを作らないコマンドなので）。
+    // 見るのは「犯人を突き止めたか」だけ
+    check: (s) => {
+      const culprit = s.bisect?.culprit;
+      if (!culprit) return false;
+      return s.commits[culprit]?.message === '営業時間を書き換えた';
+    },
+    hints: [
+      'git bisect start で始めます。',
+      'いまいる場所は壊れているので git bisect bad。省略形で、コミットを書かなくて構いません。',
+      '動いていたのは最初のコミットです。git log で id を見て、git bisect good <その id> と打ちます。',
+      'まん中へ勝手に移ります。cat shop.txt で中身を読んで、「開いています」なら git bisect good、「閉まっています」なら git bisect bad です。',
+      '3 回答えれば見つかります。見つけたあとは git bisect reset で、始める前の枝へ戻れます。',
+    ],
+  },
+  {
     id: 'remote',
     title: 'リモート ― fetch と pull の違い',
     intro:

@@ -210,8 +210,11 @@ function moveToCommit(state: RepoState, oid: string): CommandResult {
  *
  * 本物の Git と同じ判定 ― 手元で変えているファイルが、移動先で**別の中身**に
  * なっているときだけ止める。移動先で同じ中身なら、変更を持ったまま移れる。
+ *
+ * bisect も HEAD を動かして回るので、同じ判定を通す
+ * ― 探している途中で手元の変更が消えては、探すどころではない。
  */
-function wouldOverwrite(state: RepoState, target: string): CommandResult | null {
+export function wouldOverwrite(state: RepoState, target: string): CommandResult | null {
   const here = treeOf(state, headCommitId(state));
   const there = treeOf(state, target);
 
@@ -235,7 +238,7 @@ function wouldOverwrite(state: RepoState, target: string): CommandResult | null 
  * 移動先が知らないファイル（untracked）と、
  * 移動先でも同じ中身のファイルへの変更は、そのまま持っていく ― 本物と同じ。
  */
-function carryOver(state: RepoState, target: string): RepoState {
+export function carryOver(state: RepoState, target: string): RepoState {
   const there = treeOf(state, target);
   const work = copyTree(there);
   const keep: FileState[] = [];

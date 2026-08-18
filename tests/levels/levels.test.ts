@@ -33,6 +33,15 @@ const SOLUTIONS: Record<string, string[]> = {
     'git commit -m ".env を追跡から外した"',
   ],
   interactive: ['git rebase -i main', 'todo squash 2', 'todo drop 3', 'todo run'],
+  /*
+   * 8 個を 3 回で絞る。答えは shop.txt の中身で決まっていて、
+   * 移る先も決定的なので、この 3 手は毎回同じになる。
+   *   HEAD~7 が最初のコミット（動いていた側）
+   *   1 回目は 5 つ目（壊れている）→ bad
+   *   2 回目は 3 つ目（動く）      → good
+   *   3 回目は 4 つ目（壊れている）→ bad で確定
+   */
+  bisect: ['git bisect start HEAD HEAD~7', 'git bisect bad', 'git bisect good', 'git bisect bad'],
   conflict: ['git merge feature', 'git checkout --ours app.ts', 'git add app.ts', 'git commit'],
 };
 

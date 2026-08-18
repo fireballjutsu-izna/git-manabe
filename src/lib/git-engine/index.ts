@@ -7,6 +7,7 @@
 
 export type {
   Area,
+  Bisect,
   Commit,
   CommandResult,
   ConflictFile,
@@ -45,6 +46,7 @@ export {
 } from './state';
 export { diffLines, formatFileDiff, hasConflictMarkers, sameContent } from './content';
 export { isIgnored, ignorePatterns, matchesIgnore } from './ignore';
+export { bisectRange } from './commands/bisect';
 export { run } from './run';
 export { parseLine, GIT_COMMANDS, HELPER_COMMANDS, PLANNED_COMMANDS } from './parse';
 export {
