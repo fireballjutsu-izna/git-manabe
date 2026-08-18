@@ -24,7 +24,7 @@ export const DOCS: Doc[] = [
     id: 'ignore',
     title: '.gitignore ― 出してしまった秘密',
     summary:
-      '.gitignore は「まだ追跡していないもの」にしか効かない。コミット済みのものは git rm --cached まで止まらず、外しても履歴には残る',
+      '.gitignore は「まだ追跡していないもの」にしか効かない。コミット済みのものは git rm --cached まで止まらず、外しても 1 つ前のコミットには残る',
   },
   {
     id: 'branch',
