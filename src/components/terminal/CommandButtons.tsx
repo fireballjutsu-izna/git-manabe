@@ -504,7 +504,7 @@ export function CommandButtons({ suggest }: { suggest?: { file?: string; branch?
       className="rounded border border-line bg-elev px-2.5 py-1.5 text-left font-mono text-xs text-fg hover:border-cyan-neon hover:bg-tint-cyan"
     >
       {s.label}
-      {s.hint && <span className="ml-2 font-sans text-[10px] text-muted">{s.hint}</span>}
+      {s.hint && <span className="ml-2 font-sans text-xs sm:text-[10px] text-muted">{s.hint}</span>}
     </button>
   );
 

@@ -45,7 +45,7 @@ export function StepChat({
             >
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-xs font-bold text-accent">{step.from}</span>
-                <span className="font-mono text-[11px] text-muted">
+                <span className="font-mono text-xs sm:text-[11px] text-muted">
                   {i + 1} / {steps.length}
                 </span>
               </div>

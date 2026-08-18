@@ -215,6 +215,29 @@
   --radius-card: var(--radius);
 }
 
+/*
+ * 狭い画面では、押せるものを 44px 角以上にする。
+ *
+ * 指の当たりは 7〜10mm あり、これは画面上で 40px 前後になる。
+ * マウスの矢印は 1px に当てられるが、指はそうはいかない ―
+ * 同じ見た目のままだと、隣のボタンを押してしまう。
+ * 640px 以上では触らないので、画面の広いところの見た目は変わらない。
+ *
+ * xterm の隠し textarea だけは外す。これはカーソル位置に貼り付いていて、
+ * 大きさを変えると、ターミナルの入力位置そのものがずれる。
+ */
+@media (max-width: 639px) {
+  button,
+  [role='button'],
+  input,
+  select,
+  textarea:not(.xterm-helper-textarea),
+  a[data-tap] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
 body {
   background: var(--bg);
   color: var(--text);

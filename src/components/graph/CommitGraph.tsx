@@ -591,7 +591,7 @@ function Legend({
   theme: 'plain' | 'florist';
 }) {
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line px-3 py-2 text-[11px] text-muted">
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line px-3 py-2 text-xs sm:text-[11px] text-muted">
       <li>
         <span className="text-branch">■</span> 枝
       </li>

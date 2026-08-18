@@ -77,7 +77,7 @@ export function LevelList() {
                     {level.task}
                   </span>
                   {done && (
-                    <span className="mt-1 block text-[11px] text-remote">
+                    <span className="mt-1 block text-xs sm:text-[11px] text-remote">
                       {progress.cleared[level.id]} にクリア
                     </span>
                   )}

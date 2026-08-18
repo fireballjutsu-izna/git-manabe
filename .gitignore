@@ -7,3 +7,7 @@ artifacts/
 .env*.local
 next-env.d.ts
 tsconfig.tsbuildinfo
+
+# 検証のために一時的に置く使い捨てのスクリプトやテスト。
+# 消し忘れても、リポジトリには入らないようにしておく。
+_probe*

@@ -83,7 +83,7 @@ export function ScenarioList() {
                   <span className="mt-0.5 block text-sm leading-relaxed text-muted">
                     {scenario.subtitle}
                   </span>
-                  <span className="mt-1 block font-mono text-[11px] text-muted">
+                  <span className="mt-1 block font-mono text-xs sm:text-[11px] text-muted">
                     {scenario.steps.length} ステップ / 最短 {totalPar(scenario)} 手
                     {record && ` ・ あなたの記録 ${record.moves} 手`}
                   </span>
