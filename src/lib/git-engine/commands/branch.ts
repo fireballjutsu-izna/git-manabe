@@ -1,5 +1,6 @@
 import { hasFlag, type ParsedCommand } from '../parse';
 import {
+  isAncestor,
   currentBranchName,
   fail,
   findBranch,
@@ -35,7 +36,8 @@ export function branch(state: RepoState, command: ParsedCommand): CommandResult 
   const deleting = hasFlag(command, '-d', '-D', '--delete');
   const name = command.positional[0];
 
-  if (deleting) return deleteBranch(state, name);
+  // -D は「未マージでも消す」。-d との差がそのまま安全弁になっている
+  if (deleting) return deleteBranch(state, name, hasFlag(command, '-D'));
   if (!name) return listBranches(state);
   return createBranch(state, name);
 }
@@ -71,17 +73,31 @@ function createBranch(state: RepoState, name: string): CommandResult {
     );
   }
 
+  // タグと同じ名前でも作れる（名前空間が別）。ただし名前だけで指せなくなる
+  const clashes = state.tags.some((t) => t.name === name);
+
   return ok(
     setBranch(state, name, target),
     [
       `${name} を ${target} に作りました。`,
       `HEAD は動いていません。移るには git switch ${name} を実行してください。`,
+      ...(clashes
+        ? [
+            '',
+            `注意: ${name} というタグもあります。タグと枝は別の入れ物なので同じ名前を持てますが、`,
+            `${name} とだけ書いたときに、どちらを指しているのか決められなくなります（枝のほうが選ばれます）。`,
+          ]
+        : []),
     ],
     ['repo'],
   );
 }
 
-function deleteBranch(state: RepoState, name: string | undefined): CommandResult {
+function deleteBranch(
+  state: RepoState,
+  name: string | undefined,
+  force: boolean,
+): CommandResult {
   if (!name) return fail(state, '消す枝の名前を書いてください。', '例: git branch -d feature');
 
   if (!findBranch(state, name)) {
@@ -95,11 +111,36 @@ function deleteBranch(state: RepoState, name: string | undefined): CommandResult
     );
   }
 
+  /*
+   * まだどこにも取り込まれていない枝は、-d では消さない。
+   *
+   * これが -d の存在理由そのもの。名前を外すとそのコミットはどこからも辿れなくなり、
+   * 「消えてはいない」とはいえ、気づかなければ失くしたのと同じになる。
+   * 本物も the branch is not fully merged と言って -D を要求する。
+   */
+  const target = findBranch(state, name)?.target;
+  const head = headCommitId(state);
+  const merged = target && head ? isAncestor(state, target, head) : false;
+
+  if (!force && !merged) {
+    return fail(
+      state,
+      `${name} は、まだどこにも取り込まれていません。`,
+      `消すとこの枝のコミットはどこからも辿れなくなります。それでよければ git branch -D ${name} です。`,
+    );
+  }
+
   return ok(
     removeBranch(state, name),
     [
       `${name} を消しました。`,
       'コミット自体は消えていません。名前が外れただけです。',
+      ...(merged
+        ? []
+        : [
+            'この枝はまだ取り込まれていなかったので、ここにあったコミットはどこからも辿れなくなりました。',
+            'git reflog から拾い直せます。',
+          ]),
     ],
     ['repo'],
   );

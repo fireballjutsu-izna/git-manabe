@@ -44,7 +44,11 @@ git rm .env              # 追跡から外し、ファイルも消す
 外したあと、`.gitignore` に書いてあれば、そこからは無視されます。
 **順番はどちらでも構いません**が、両方やらないと止まりません。
 
-```bash
+```bash run
+touch .env API_KEY=ひみつ   # うっかり作って
+git add .
+git commit -m "開店"        # うっかりコミットしてしまった
+
 touch .gitignore
 append .gitignore .env      # ← 無視すると決める
 git rm --cached .env        # ← 追跡をやめる
@@ -74,7 +78,7 @@ secrets/        そのディレクトリの下ぜんぶ
 git rm --cached .env
 git commit -m ".env を外した"
 
-git diff HEAD~1 HEAD     # ← .env が「消えた側」に出る
+git diff HEAD~1 HEAD     # ← .env が「消えた側」に出る（HEAD~1 は「1 つ前のコミット」）
                          #    つまり、1 つ前にはまだ入っていたということ
 ```
 

@@ -50,6 +50,22 @@ function move(state: RepoState, command: ParsedCommand, as: 'checkout' | 'switch
   const creating = hasFlag(command, as === 'checkout' ? '-b' : '-c', '-B', '-C');
   const target = command.positional[0];
 
+  /*
+   * git checkout -- <path> は、移動ではなく「手元の変更を捨てる」。
+   *
+   * -- で区切るのは、枝の名前とファイル名が同じでも読み分けられるようにするため。
+   * 区切りが無くても、枝でもコミットでもなく手元にあるファイルなら、そちらとして読む
+   * ― 本物も同じ順で解く。
+   */
+  if (!creating && target !== undefined) {
+    // パーサは - で始まるものを flags に入れるので、-- もそちらに来る
+    const paths = command.positional;
+    const separated = hasFlag(command, '--');
+    if (separated || (paths.length > 0 && looksLikePaths(state, paths))) {
+      return discard(state, paths);
+    }
+  }
+
   if (!target) {
     return fail(
       state,
@@ -334,6 +350,67 @@ function takeSide(state: RepoState, command: ParsedCommand, side: 'ours' | 'thei
       ...chosen.map((line) => `  ${line}`),
       '目印は消えました。ただし、これだけでは決着したことになりません。',
       `git add ${path} を打つと、Git に「これで確定」と伝わります。`,
+    ],
+    ['workingDir'],
+  );
+}
+
+/** 引数がぜんぶ「手元にあるファイル」で、枝でもコミットでもないか。 */
+function looksLikePaths(state: RepoState, paths: string[]): boolean {
+  return paths.every(
+    (p) =>
+      resolveRevision(state, p) === null &&
+      (state.work[p] !== undefined || state.stage[p] !== undefined || state.tracked.includes(p)),
+  );
+}
+
+/**
+ * `git checkout [--] <path>...` ― 手元の変更を捨てて、ステージの中身に戻す。
+ *
+ * reset との違いがここではっきりする。
+ *   git reset <path>     ステージから降ろす。手元のファイルはそのまま
+ *   git checkout <path>  手元のファイルを戻す。**書きかけは消える**
+ * 戻す先はステージで、ステージに無ければ HEAD。
+ *
+ * このサイトで唯一「黙って手元の変更が消える」コマンドなので、消したことを必ず言う。
+ */
+function discard(state: RepoState, paths: string[]): CommandResult {
+  if (paths.length === 0) {
+    return fail(state, 'どのファイルを戻すのか書いてください。', '例: git checkout -- app.ts');
+  }
+
+  const head = treeOf(state, headCommitId(state));
+  const unknown = paths.filter(
+    (p) => state.stage[p] === undefined && head[p] === undefined && !state.tracked.includes(p),
+  );
+  if (unknown.length > 0) {
+    return fail(
+      state,
+      `${unknown.join(', ')} は Git がまだ知らないファイルです。`,
+      '一度も add していないファイルは、Git には戻す先がありません。手で消してください。',
+    );
+  }
+
+  const work = { ...state.work };
+  const restored: string[] = [];
+  for (const path of paths) {
+    const source = state.stage[path] ?? head[path];
+    if (source === undefined) continue;
+    if (sameContent(state.work[path], source)) continue;
+    work[path] = [...source];
+    restored.push(path);
+  }
+
+  if (restored.length === 0) {
+    return ok(state, [`${paths.join(', ')} は、もうステージと同じ中身です。`], []);
+  }
+
+  return ok(
+    { ...state, work, workingDir: state.workingDir.filter((f) => !restored.includes(f.path)) },
+    [
+      `${restored.join(', ')} を戻しました。`,
+      '手元の書きかけは消えました。ここは取り消せません ― まだ Git に渡していない中身は、どこにも記録されていないからです。',
+      'ステージに載せたぶんは残っています。そちらも降ろすなら git reset <path> です。',
     ],
     ['workingDir'],
   );

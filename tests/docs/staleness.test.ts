@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { DOCS } from '@/lib/docs';
 import { LEVELS } from '@/lib/levels';
 import { SCENARIOS } from '@/lib/scenarios';
-import { GIT_COMMANDS, HELPER_COMMANDS, PLANNED_COMMANDS } from '@/lib/git-engine';
+import { GIT_COMMANDS, HELPER_COMMANDS, PLANNED_COMMANDS, emptyState, run } from '@/lib/git-engine';
 
 /**
  * 記事が実装から取り残されていないかを見る。
@@ -55,9 +55,13 @@ const engineSource = walk(ENGINE_DIR, '.ts')
 const KNOWN = new Set<string>([...GIT_COMMANDS, ...HELPER_COMMANDS]);
 const PLANNED = new Set<string>(PLANNED_COMMANDS);
 
-/** 記事の中の ``` の塊。 */
-function blocks(text: string): { lang: string; body: string }[] {
-  return [...text.matchAll(/```(\w*)\n([\s\S]*?)```/g)].map((m) => ({ lang: m[1], body: m[2] }));
+/** 記事の中の ``` の塊。lang のあとに書いた印（meta）も拾う。 */
+function blocks(text: string): { lang: string; meta: string; body: string }[] {
+  return [...text.matchAll(/```(\w*)([^\n]*)\n([\s\S]*?)```/g)].map((m) => ({
+    lang: m[1],
+    meta: m[2].trim(),
+    body: m[3],
+  }));
 }
 
 /**
@@ -283,5 +287,50 @@ describe('記事の id が目次と食い違っていない', () => {
 
     const path = page.text.match(/path:\s*'([^']+)'/);
     expect(path?.[1]).toBe(`/docs/${nav[1]}/`);
+  });
+});
+
+/**
+ * ```bash run と書いた塊は、**そのまま打って通る**ことを約束する。
+ *
+ * コマンド名とフラグだけを見る検査（上の 2 つ）は、
+ * 「文脈のある一続きの例が、実際にその順で通るか」を見ていない。
+ * 記事の山場の手順が、1 行目からエラーになっていたことが実際にあった ―
+ * しかも読んだ人には、記事が嘘なのか自分が悪いのか区別が付かない。
+ *
+ * 印を付けるのは手順の塊だけ。書式を並べただけの塊（git tag <名前> など）は
+ * 打つためのものではないので、対象にしない。
+ */
+describe('run と書いた例は、そのまま打って通る', () => {
+  /** その記事の、印の付いた塊を上から順につないだコマンド列。 */
+  function runnableLines(text: string): string[] {
+    return blocks(text)
+      .filter((b) => b.lang === 'bash' && b.meta === 'run')
+      .flatMap((b) => b.body.split('\n'))
+      .map((line) => line.replace(/#.*$/, '').trim())
+      .filter(Boolean);
+  }
+
+  const runnable = pages
+    .map((p) => [p.where, runnableLines(p.text)] as const)
+    .filter(([, lines]) => lines.length > 0);
+
+  it('印の付いた例が 1 つ以上ある', () => {
+    // 検査そのものが空振りしていないことの確認
+    expect(runnable.length).toBeGreaterThan(0);
+  });
+
+  it.each(runnable)('%s', (_, lines) => {
+    let state = emptyState();
+    const failures: string[] = [];
+
+    // git init から始めていない記事のために、先に 1 つだけ通しておく
+    for (const line of [...(lines[0] === 'git init' ? [] : ['git init']), ...lines]) {
+      const result = run(state, line);
+      if (result.error) failures.push(`${line} → ${result.error}`);
+      state = result.state;
+    }
+
+    expect(failures).toEqual([]);
   });
 });

@@ -272,7 +272,7 @@ function unstage(
     return fail(
       state,
       '--hard とパスは、いっしょに使えません。',
-      'ステージから降ろすだけなら git reset <path>、手元のファイルごと戻すなら git checkout <path> です。',
+      'ステージから降ろすだけなら git reset <path>、手元のファイルごと戻すなら git checkout -- <path> です。',
     );
   }
 

@@ -227,10 +227,22 @@ describe('git tag', () => {
     ).toContain('もうあります');
   });
 
-  it('枝と同じ名前は断る', () => {
-    expect(
-      last(['git init', 'git commit -m one', 'git branch release', 'git tag release']).error,
-    ).toContain('枝の名前として使われています');
+  /*
+   * タグは refs/tags、枝は refs/heads に住んでいて名前空間が別なので、
+   * 本物も同じ名前を持てる。以前はここで断っていたが、それは誤りだった。
+   * 名前だけで指したときに決められなくなるので、そのことは言う。
+   */
+  it('枝と同じ名前でも付けられる。ただし注意を出す', () => {
+    const result = last(['git init', 'git commit -m one', 'git branch release', 'git tag release']);
+    expect(result.error).toBeUndefined();
+    expect(result.state.tags.map((t) => t.name)).toEqual(['release']);
+    expect(result.log.join('\n')).toContain('決められなくなります');
+  });
+
+  it('逆順（タグが先、枝があと）でも同じ注意が出る', () => {
+    const result = last(['git init', 'git commit -m one', 'git tag release', 'git branch release']);
+    expect(result.error).toBeUndefined();
+    expect(result.log.join('\n')).toContain('決められなくなります');
   });
 
   it('コミットが無いうちは付けられない', () => {

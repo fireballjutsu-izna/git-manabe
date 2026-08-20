@@ -41,13 +41,6 @@ function addTag(state: RepoState, name: string, at: string | undefined): Command
   if (state.tags.some((t) => t.name === name)) {
     return fail(state, `${name} というタグはもうあります。`, `付け替えるなら git tag -d ${name} で外してからです。`);
   }
-  if (state.branches.some((b) => b.name === name)) {
-    return fail(
-      state,
-      `${name} は枝の名前として使われています。`,
-      'タグと枝で同じ名前を使うと、どちらを指しているのか分からなくなります。',
-    );
-  }
 
   const target = at ? resolveRevision(state, at) : headCommitId(state);
   if (target === 'ambiguous') {
@@ -62,12 +55,27 @@ function addTag(state: RepoState, name: string, at: string | undefined): Command
   const next: RepoState = { ...state, tags: [...state.tags, { name, target }] };
   const commit = state.commits[target];
 
+  /*
+   * 枝と同じ名前でも作れる。本物も同じ ―
+   * タグは refs/tags、枝は refs/heads に住んでいて、名前空間が別だから。
+   * ただし git switch v1.0 のように名前だけで指すと、どちらの話か決められない。
+   * 本物はそこで warning: refname is ambiguous を出して枝を選ぶ。
+   */
+  const clashes = state.branches.some((b) => b.name === name);
+
   return ok(
     next,
     [
       `${name} を ${target} に付けました（${commit?.message ?? ''}）。`,
       'タグはここから動きません。このあとコミットしても、付いたままです。',
       '枝との違いはそこだけです ― 枝は付いていったコミットごと前へ進みます。',
+      ...(clashes
+        ? [
+            '',
+            `注意: ${name} という枝もあります。タグと枝は別の入れ物なので同じ名前を持てますが、`,
+            `${name} とだけ書いたときに、どちらを指しているのか決められなくなります（枝のほうが選ばれます）。`,
+          ]
+        : []),
     ],
     ['repo'],
   );

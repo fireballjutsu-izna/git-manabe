@@ -1,6 +1,7 @@
 import { defaultContent } from '../content';
-import { flagValue, type ParsedCommand } from '../parse';
+import { flagValue, unknownFlags, type ParsedCommand } from '../parse';
 import {
+  mergeMessage,
   joinJa,
   addCommit,
   copyTree,
@@ -39,9 +40,28 @@ function autoPath(state: RepoState): string {
  * detached HEAD なら HEAD だけが進み、どの枝も動かない ―
  * 置いていかれたコミットがどうなるかを見せたいので、この違いはそのまま再現する。
  */
+/** このサイトの commit が読むフラグ。ここに無いものは断る。 */
+const KNOWN_FLAGS = ['-m', '--message'] as const;
+
 export function commit(state: RepoState, command: ParsedCommand): CommandResult {
   const blocked = requireRepo(state);
   if (blocked) return blocked;
+
+  /*
+   * 知らないフラグを黙って落とすと、打った本人が気づけない。
+   * --amend がその最たるもので、直前のコミットを書き換えたつもりが
+   * 新しいコミットが 1 つ増える ― log を見るまで分からない。
+   */
+  const unknown = unknownFlags(command, KNOWN_FLAGS);
+  if (unknown.length > 0) {
+    return fail(
+      state,
+      `${unknown.join(', ')} は、このサイトの commit では扱えません。`,
+      unknown.includes('--amend')
+        ? '直前のコミットをやり直すなら、git reset --soft HEAD~1 で取り消してから、もう一度 git commit -m "…" です（本物の --amend は、それを 1 手でやります）。'
+        : `使えるのは ${KNOWN_FLAGS.join(' / ')} だけです。`,
+    );
+  }
 
   const message = flagValue(command, '-m', '--message');
 
@@ -171,7 +191,7 @@ function finishMerge(state: RepoState, message: string): CommandResult {
 
   const id = nextCommitId(state);
   // 本物の Git はここでメッセージを用意してエディタを開く。同じ既定文を使う
-  const text = message || `Merge ${pausing.from} into ${branch}`;
+  const text = message || mergeMessage(pausing.from, branch);
   const paths = state.index.map((f) => f.path);
 
   let next = addCommit(state, {

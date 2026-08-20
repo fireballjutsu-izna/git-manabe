@@ -84,7 +84,7 @@ describe('枝分かれと合流', () => {
   it('行は log と同じ並びで、ref も付く', () => {
     const lines = run(play(MERGED), 'git log --graph').log;
     expect(lines[0]).toContain('(HEAD -> main)');
-    expect(lines[0]).toContain('Merge spring into main');
+    expect(lines[0]).toContain("Merge branch 'spring'");
     expect(lines.join('\n')).toContain('(spring)');
   });
 });
