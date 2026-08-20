@@ -286,7 +286,8 @@ describe('どの枝からも指されていないコミット', () => {
       'git checkout -b feature',
       'git commit -m 枝',
       'git switch main',
-      'git branch -d feature',
+      // まだ取り込んでいない枝なので、-d では断られる。-D が要る
+      'git branch -D feature',
     ]);
     // 枝の名前が外れただけで、コミット 2 つはどちらも残る
     expect(Object.keys(state.commits)).toHaveLength(2);

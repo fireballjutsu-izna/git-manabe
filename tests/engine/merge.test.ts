@@ -81,7 +81,7 @@ describe('3-way マージ', () => {
     expect(mergeCommit.parents).toHaveLength(2);
     expect(mergeCommit.parents).toContain(idOf(before, '幹の上'));
     expect(mergeCommit.parents).toContain(idOf(before, '枝の上'));
-    expect(mergeCommit.message).toBe('Merge feature into main');
+    expect(mergeCommit.message).toBe("Merge branch 'feature'");
   });
 
   it('main だけが動き、feature は置いていかれる', () => {

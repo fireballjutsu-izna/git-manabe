@@ -520,7 +520,7 @@ describe('commit でマージを終える', () => {
 
     const head = headCommitId(result.state) as string;
     expect(result.state.commits[head].parents).toHaveLength(2);
-    expect(result.state.commits[head].message).toBe('Merge feature into main');
+    expect(result.state.commits[head].message).toBe("Merge branch 'feature'");
   });
 
   it('選んだ中身が、そのままコミットに入る', () => {

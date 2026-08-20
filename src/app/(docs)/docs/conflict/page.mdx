@@ -66,7 +66,7 @@ Git は変更を**かたまり**で見ていて、地続きのかたまりは切
 
 このサイトなら、[サンドボックス](/sandbox)でこう打つと、止まらないほうを見られます。
 
-```bash
+```bash run
 touch v.txt 1行目
 git add .
 git commit -m "根"
@@ -121,6 +121,28 @@ edit vase.txt <残したい中身>      # 自分で書く（本物ならエデ�
 `--ours` と `--theirs` は、目印ごと片側に置き換えます。
 どちらでもない第三の案（両方を合わせたもの）にしたいときは、自分で書きます。
 
+### rebase のときは、ours と theirs が入れ替わります
+
+ここが rebase でいちばん事故が起きるところです。
+
+| 止まった操作 | `--ours` は | `--theirs` は |
+| --- | --- | --- |
+| merge | いまいる枝（自分） | 取り込む枝（相手） |
+| rebase / cherry-pick | **置き直す先**（`main` 側） | **いま当てているコミット**（自分の作業） |
+
+理由はこうです。rebase は「`main` の上に、自分のコミットを 1 つずつ**取り込んで**いく」操作なので、
+Git から見ると**自分のほうが「相手」**になります。
+
+merge のつもりで `--ours` を打つと、自分のコミットの中身が丸ごと消えます。
+しかも黙って通るので、気づくのは何コミットも先です。
+
+このサイトは目印にそのまま書き分けています ― 迷ったら、書いてあるほうを読んでください。
+
+```
+<<<<<<< 積む先        ← --ours（main 側）
+>>>>>>> 枝の変更      ← --theirs（自分の作業）
+```
+
 **目印を消し忘れないでください。**
 本物の Git は、`<<<<<<<` が残ったままでも `add` を通してしまいます。
 その結果、目印の入ったファイルがそのままコミットされる ―
@@ -154,7 +176,7 @@ git merge --abort        # 始める前の状態にそのまま戻る
 
 `commit` も、いつもの `commit` です。
 違うのは、できあがるコミットの親が 2 つになることだけ。
-メッセージを省くと、Git が用意した既定文（`Merge feature into main`）が使われます。
+メッセージを省くと、Git が用意した既定文（"Merge branch 'feature'"）が使われます。
 
 ## 止まっている間にできること
 
@@ -187,14 +209,17 @@ git merge --abort        # 始める前の状態にそのまま戻る
 
 | 止まったもの | 続ける | やめる |
 | --- | --- | --- |
-| merge | `git commit` | `git merge --abort` |
+| merge | `git commit`（`git merge --continue` でも同じ） | `git merge --abort` |
 | rebase | `git rebase --continue` | `git rebase --abort` |
 | cherry-pick | `git cherry-pick --continue` | `git cherry-pick --abort` |
 
-merge だけ `--continue` が無いのは、**続きが無い**からです。
-merge は 1 回で終わる操作なので、決着をつけたらそのままコミットすれば済みます。
-rebase と cherry-pick は「まだ残りがある」ことを Git 側が覚えていて、
+merge だけ「そのまま `git commit` でよい」のは、**続きが無い**からです。
+merge は 1 回で終わる操作なので、決着をつけたらコミットすれば済みます。
+`git merge --continue` も同じことをします ― 呼び名が 2 つあるだけです。
+
+rebase と cherry-pick は違います。「まだ残りがある」ことを Git 側が覚えていて、
 `--continue` はそれを先へ進めるためのコマンドです。
+だからこの 2 つでは `git commit` では終われません。
 
 どれで止まっているかは `git status` が教えてくれます。
 

@@ -268,6 +268,20 @@ export function revert(state: RepoState, command: ParsedCommand): CommandResult 
   const dirty = requireClean(state, '打ち消し');
   if (dirty) return dirty;
 
+  /*
+   * -m は「マージのどちら側を残すか」を選ぶ指定。
+   * このサイトはマージコミットの revert に踏み込んでいないので受けられないが、
+   * パーサが -m のあとを全部メッセージとして飲むので、
+   * 断らないと「何を打ち消すのか書いてください」という的外れな答えになる。
+   */
+  if (hasFlag(command, '-m')) {
+    return fail(
+      state,
+      'マージコミットの revert は、このサイトでは扱っていません。',
+      '本物では -m でどちら側の流れを残すかを選びます。ここで打ち消せるのは、親が 1 つのコミットだけです。',
+    );
+  }
+
   const spec = command.positional[0];
   if (!spec) {
     return fail(state, '何を打ち消すのか書いてください。', '例: git revert HEAD');

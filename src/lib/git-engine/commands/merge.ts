@@ -1,6 +1,10 @@
 import { applyOnto, pauseWith, restore, snapshot } from '../apply';
+import { commit } from './commit';
 import { hasFlag, unknownFlags, type ParsedCommand } from '../parse';
 import {
+  joinJa,
+  mergeMessage,
+  pausingWays,
   requireClean,
   requireNoPause,
   addCommit,
@@ -33,7 +37,7 @@ import type { CommandResult, RepoState } from '../types';
  *   どちらでもない（分岐）  → 3-way。親を 2 つ持つマージコミットが生まれる
  */
 /** このサイトの merge が読むフラグ。ここに無いものは断る。 */
-const KNOWN_FLAGS = ['--abort'] as const;
+const KNOWN_FLAGS = ['--abort', '--continue'] as const;
 
 export function merge(state: RepoState, command: ParsedCommand): CommandResult {
   const blocked = requireRepo(state);
@@ -41,6 +45,13 @@ export function merge(state: RepoState, command: ParsedCommand): CommandResult {
 
   // --abort だけは、マージの途中でも受ける（というより、そのためにある）
   if (hasFlag(command, '--abort')) return abort(state);
+
+  /*
+   * git merge --continue は本物にもある（2.12 から）。
+   * やることは git commit と同じ ― 決着のついたステージを 1 つのコミットに束ねる。
+   * 「merge には --continue が無い」と教えていた時期があるが、それは誤りだった。
+   */
+  if (hasFlag(command, '--continue')) return resume(state);
 
   /*
    * 知らないフラグを黙って落とすと、いちばん危ない誤解を作る。
@@ -112,6 +123,33 @@ export function merge(state: RepoState, command: ParsedCommand): CommandResult {
  * 途中で止まっているマージを、なかったことにする。
  * 「詰んだら戻れる」ことを先に知っておくと、コンフリクトは怖くなくなる。
  */
+/**
+ * `git merge --continue`
+ *
+ * ぶつかったぶんの決着がついたあと、マージコミットを作る。
+ * git commit とまったく同じことをするので、そちらへ回すだけでよい。
+ */
+function resume(state: RepoState): CommandResult {
+  const pausing = state.pausing;
+  if (!pausing) {
+    return fail(
+      state,
+      'いまマージは止まっていません。',
+      '--continue は、ぶつかって止まったマージの続きに使います。',
+    );
+  }
+  if (pausing.kind !== 'merge') {
+    const ways = pausingWays(pausing.kind);
+    return fail(
+      state,
+      joinJa('いま止まっているのは', ways.label, 'です。'),
+      `続けるなら ${ways.next} です。`,
+    );
+  }
+  // 引数なしの git commit と同じ入力を組み立てて渡す
+  return commit(state, { raw: 'git commit', name: 'commit', isGit: true, flags: {}, positional: [] });
+}
+
 function abort(state: RepoState): CommandResult {
   const pausing = state.pausing;
   if (!pausing) {
@@ -206,7 +244,12 @@ function threeWay(
   }
 
   const id = nextCommitId(state);
-  const message = `Merge ${target} into ${branch}`;
+  /*
+   * 本物の既定文。既定の枝（main / master）へ取り込むときは into が付かない。
+   *   main へ     → Merge branch 'feature'
+   *   develop へ  → Merge branch 'feature' into develop
+   */
+  const message = mergeMessage(target, branch);
 
   let next = addCommit(state, {
     id,

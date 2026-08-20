@@ -461,6 +461,19 @@ export function joinJa(...parts: string[]): string {
   }, '');
 }
 
+/**
+ * マージコミットの既定のメッセージ。
+ *
+ * 本物はこう書き分ける ― 既定の枝（main / master）へ取り込むときは into が付かない。
+ *   main へ     Merge branch 'feature'
+ *   develop へ  Merge branch 'feature' into develop
+ * 記事が git log の出力として載せているので、文言までそろえておく。
+ */
+export function mergeMessage(from: string, into: string): string {
+  const base = `Merge branch '${from}'`;
+  return into === 'main' || into === 'master' ? base : `${base} into ${into}`;
+}
+
 /** 止まっている作業の、続け方とやめ方。断り文句にも案内にも使う。 */
 export function pausingWays(kind: 'merge' | 'rebase' | 'cherry-pick'): {
   label: string;
